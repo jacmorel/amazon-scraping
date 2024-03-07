@@ -20,12 +20,11 @@ def run():
     driver = create_driver()
 
     Login(driver, email, password).login()
-    OrderHistory(driver).get_orders()
+    orders = OrderHistory(driver).get_orders()
 
     # keep this line of code at the bottom
     user_input = input("Please enter something: ")
     driver.quit()
-
 
 # Press the green button in the gutter to run the script.
 if __name__ == '__main__':
