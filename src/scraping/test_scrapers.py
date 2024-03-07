@@ -20,7 +20,7 @@ def driver():
 
 
 def test_get_current_page_orders(driver):
-    test_file_path = os.path.join(BASE_DIR, 'test_pages', 'order_history_p1.html')
+    test_file_path = os.path.join(BASE_DIR, 'test_pages', 'order_history', 'order_history_p1.html')
     driver.get(f'file://{test_file_path}')
 
     orders = OrderHistory(driver).get_current_page_orders()
