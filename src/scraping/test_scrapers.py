@@ -1,11 +1,12 @@
 import logging as log
 import os
 from datetime import datetime
+from unittest.mock import patch
 
 import pytest
 from selenium import webdriver
 
-from scraping.scrapers import OrderHistory, Order, OrderDetail, Transaction
+from scraping.scrapers import OrderHistory, Order, OrderDetail, Transaction, PageIterator
 
 log.basicConfig(level=log.DEBUG)
 
@@ -23,6 +24,32 @@ def driver():
 @pytest.fixture
 def order():
     return Order("1", None, None)
+
+
+@pytest.mark.parametrize("current, next", [
+    ['order_history_p1.html',
+     'https://www.amazon.com/your-orders/orders?timeFilter=year-2024&startIndex=10&ref_=ppx_yo2ov_dt_b_pagination_1_2'],
+    ['order_history_p2.html',
+     'https://www.amazon.com/gp/product/B0BFG45YJ9/ref=ppx_yo_dt_b_asin_title_o07_s03?ie=UTF8&psc=1'],
+])
+def test_page_iterator(driver, current, next):
+    load_page(driver, ['order_history', current])
+
+    with patch.object(PageIterator, "get", return_value=None) as mock_get:
+        it = PageIterator(OrderHistory(driver))
+        it.__iter__()
+        it.__next__()
+
+        mock_get.assert_called_once_with(next)
+
+
+def test_page_iterator_on_last_page(driver):
+    load_page(driver, ['order_history', 'order_history_p7.html'])
+
+    with pytest.raises(StopIteration):
+        it = PageIterator(OrderHistory(driver))
+        it.__iter__()
+        it.__next__()
 
 
 def test_get_current_page_orders(driver):

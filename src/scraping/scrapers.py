@@ -1,3 +1,4 @@
+import itertools
 import logging as log
 import re
 from datetime import datetime
@@ -110,6 +111,78 @@ class Login(Scraper):
         self.wait_for_input()
 
 
+class OrderHistory(Scraper):
+    def get_orders(self):
+        self.driver.get("https://www.amazon.com/gp/your-account/order-history")
+        self.filter_orders("2024")
+        return self.get_all_orders()
+
+    def get_all_orders(self):
+        orders = []
+        iterator = PageIterator(self)
+        for page in iterator:
+            orders.append(self.get_current_page_orders())
+        return list(itertools.chain(*orders))
+
+    def filter_orders(self, time_filter):
+        orderFilter = Select(self.find_element_by_id("time-filter"))
+        orderFilter.select_by_visible_text(time_filter)
+        orderFilterForm = self.find_element_by_id("time-filter")
+        orderFilterForm.submit()
+
+    def get_current_page_orders(self):
+        elements = self.find_elements_by_class("order-card")
+        orders = [self.get_order_card(e) for e in elements]
+        return orders
+
+    def get_order_card(self, element):
+        order = Order(self.get_order_number(element),
+                      self.get_order_details_link(element),
+                      self.get_order_invoice_link(element))
+        log.info("Order number: %s", order.order_number)
+        return order
+
+    def get_order_number(self, order_card):
+        element = self.find_element_by_css(".yohtmlc-order-id .a-color-secondary.value bdi", order_card)
+        # value="//span[contains(., 'Order #')]/following-sibling::span/bdi")
+        # value='//span[@class="a-color-secondary" and preceding-sibling::span[.="Order #"]]')
+        # value='//span[preceding-sibling::span[.="Order #"]]')
+        return element.text
+
+    def get_order_details_link(self, order_card):
+        element = self.find_element_by_class("yohtmlc-order-details-link", order_card)
+        return element.get_property("href")
+
+    @staticmethod
+    def get_order_invoice_link(order_card):
+        element = order_card.find_element(By.LINK_TEXT, 'View invoice')
+        return element.get_property("href")
+
+
+class PageIterator(Scraper):
+    def __init__(self, scraper):
+        super().__init__(scraper.driver)
+
+    def __iter__(self):
+        pass
+
+    def __next__(self):
+        next_link = self.get_next_page_link()
+        if next_link is None:
+            raise StopIteration
+        else:
+            self.get(next_link)
+
+    def get(self, link):
+        self.driver.get(link)
+
+    def get_next_page_link(self):
+        arefs = self.find_elements_by_xpath("//a[contains(text(), 'Next')]")
+        if len(arefs) == 0:
+            return None
+        return arefs[0].get_attribute("href")
+
+
 class OrderDetail(Scraper):
     def __init__(self, driver: ChromiumDriver, order: Order = None):
         super().__init__(driver)
@@ -174,11 +247,6 @@ class OrderDetail(Scraper):
                 if self.order.gift_card_amount is not None:
                     self.order.gift_card_amount = - self.order.gift_card_amount
 
-    def get_details(self):
-        shipping_address = self.driver.find_element(By.CSS_SELECTOR, ".displayAddressDiv").text
-        payment_method = self.driver.find_element(By.CSS_SELECTOR,
-                                                  ".pmts-payments-instrument-detail-box-paystationpaymentmethod").text
-
     def populate_transactions(self):
         transactions_div = self.find_element_by_xpath("//span[contains(text(),'Transactions')]/../../div")
         transactions_spans = self.find_elements_by_xpath("//div[contains(@class, 'a-expander-content')]//span",
@@ -234,44 +302,3 @@ class OrderDetail(Scraper):
     @staticmethod
     def match_credit_card(s: str):
         return re.search(r'ending in (\d{4}):', s)
-
-
-class OrderHistory(Scraper):
-    def get_orders(self):
-        self.driver.get("https://www.amazon.com/gp/your-account/order-history")
-        self.filter_orders("2024")
-        return self.get_current_page_orders()
-
-    def filter_orders(self, filter):
-        orderFilter = Select(self.find_element_by_id("time-filter"))
-        orderFilter.select_by_visible_text(filter)
-        orderFilterForm = self.find_element_by_id("time-filter")
-        orderFilterForm.submit()
-
-    def get_current_page_orders(self):
-        elements = self.find_elements_by_class("order-card")
-        orders = [self.get_order_card(e) for e in elements]
-        return orders
-
-    def get_order_card(self, element):
-        order = Order(self.get_order_number(element),
-                      self.get_order_details_link(element),
-                      self.get_order_invoice_link(element))
-        log.info("Order number: %s", order.order_number)
-        return order
-
-    def get_order_number(self, order_card):
-        element = self.find_element_by_css(".yohtmlc-order-id .a-color-secondary.value bdi", order_card)
-        # value="//span[contains(., 'Order #')]/following-sibling::span/bdi")
-        # value='//span[@class="a-color-secondary" and preceding-sibling::span[.="Order #"]]')
-        # value='//span[preceding-sibling::span[.="Order #"]]')
-        return element.text
-
-    def get_order_details_link(self, order_card):
-        element = self.find_element_by_class("yohtmlc-order-details-link", order_card)
-        return element.get_property("href")
-
-    @staticmethod
-    def get_order_invoice_link(order_card):
-        element = order_card.find_element(By.LINK_TEXT, 'View invoice')
-        return element.get_property("href")
