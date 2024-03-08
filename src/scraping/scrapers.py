@@ -171,7 +171,6 @@ class OrderDetail(Scraper):
                                                "//span[contains(text(), 'Grand Total:')]/../../div[@class='a-column a-span5 a-text-right a-span-last']/span").text
 
     def get_transactions(self):
-        ITEMS_SHIPPED_LEN
         transactions_div = self.find_element_by_xpath("//span[contains(text(),'Transactions')]/../../div")
         transactions_spans = self.find_elements_by_xpath("//div[contains(@class, 'a-expander-content')]//span",
                                                          transactions_div)
