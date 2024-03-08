@@ -7,7 +7,7 @@ from selenium import webdriver
 
 from scraping.scrapers import OrderHistory, Order, OrderDetail, Transaction
 
-log.basicConfig(level=log.INFO)
+log.basicConfig(level=log.DEBUG)
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -18,6 +18,11 @@ def driver():
     yield driver
     # input("Press Enter to continue")
     driver.quit()
+
+
+@pytest.fixture
+def order():
+    return Order("1", None, None)
 
 
 def test_get_current_page_orders(driver):
@@ -58,28 +63,63 @@ def test_get_current_page_orders(driver):
     assert_object_arrays_equal(expected_orders, orders)
 
 
-def test_get_order_details_summary(driver):
+def test_order_details_populate_address(driver, order):
+    load_page(driver, ['order_details', 'shipping_address.html'])
+
+    OrderDetail(driver, order).populate_address()
+
+    assert vars(order.shipping_address) == {'full_name': 'Hermione Granger',
+                                            'street': '1111 MAIN ST',
+                                            'city_state_postal': 'LITTLE WHINGING, SU 12345-3453',
+                                            'country': 'United Kingdom'
+                                            }
+
+
+def test_order_details_populate_payment(driver, order):
+    load_page(driver, ['order_details', 'payment_method.html'])
+
+    OrderDetail(driver, order).populate_payment()
+
+    assert order.payment_credit_card == "0001"
+
+
+def test_order_details_populate_summary(driver, order):
     load_page(driver, ['order_details', 'order_summary.html'])
 
-    summary = OrderDetail(driver, Order("1", None, None)).get_summary()
+    OrderDetail(driver, order).populate_summary()
 
-    assert {'Estimated tax to be collected:': '$5.71',
-            'Grand Total:': '$74.98',
-            'Item(s) Subtotal:': '$69.27',
-            'Shipping & Handling:': '$0.00',
-            'Total before tax:': '$69.27'} == summary
+    assert order.items_subtotal_amount == 230.00
+    assert order.shipping_amount == 2.00
+    assert order.tax_amount == 18.98
+    assert order.gift_card_amount == 249.98
+    assert order.grand_total_amount == 1.00
+    assert order.items_refund_amount == 230.00
+    assert order.tax_refund_amount == 17.98
+    assert order.total_refund_amount == 248.98
 
 
-def test_get_order_details_transactions(driver):
+def test_order_details_populate_summary_refund(driver, order):
+    set_logging_level(log.INFO)
+
+    load_page(driver, ['order_details', 'order_summary_refund_section.html'])
+
+    OrderDetail(driver, order).populate_summary()
+
+    assert order.items_refund_amount == 230.00
+    assert order.tax_refund_amount == 17.98
+    assert order.total_refund_amount == 248.98
+
+
+def test_order_details_populate_transactions(driver, order):
     load_page(driver, ['order_details', 'transactions.html'])
 
-    transactions = OrderDetail(driver, Order("1", None, None)).get_transactions()
+    OrderDetail(driver, order).populate_transactions()
 
     assert_object_arrays_equal([
         Transaction(datetime(2024, 2, 25, 0, 0), 22.59, None),
         Transaction(datetime(2024, 2, 14, 0, 0), -55.04, '0002'),
         Transaction(datetime(2024, 2, 14, 0, 0), -10.81, '0002'),
-    ], transactions)
+    ], order.transactions)
 
 
 @pytest.mark.parametrize("line, expected", [
@@ -88,8 +128,8 @@ def test_get_order_details_transactions(driver):
     ["Refund:  25, 2024 - $22.59",
      "Transaction(date=None, amount=0, cc_last_4='Unparseable refund: Refund:  25, 2024 - $22.59')"]
 ])
-def test_extract_refund(driver, line, expected):
-    order_detail = OrderDetail(driver, Order(None, None, None))
+def test_extract_refund(driver, order, line, expected):
+    order_detail = OrderDetail(driver, order)
     tx = order_detail.extract_refund(line)
     assert expected == str(tx)
 
@@ -102,8 +142,8 @@ def test_extract_refund(driver, line, expected):
     ["February 14, 2024 - Visa ending in : $55.04",
      "Transaction(date=None, amount=0, cc_last_4='Unparseable payment: February 14, 2024 - Visa ending in : $55.04')"]
 ])
-def test_extract_payment(driver, line, expected):
-    order_detail = OrderDetail(driver, Order(None, None, None))
+def test_extract_payment(driver, order, line, expected):
+    order_detail = OrderDetail(driver, order)
     tx = order_detail.extract_payment(line)
     assert expected == str(tx)
 
@@ -114,9 +154,9 @@ def load_page(driver, relative_path_elements):
     driver.get(f'file://{test_file_path}')
 
 
-def order(number="", details_link="", invoice_link=""):
-    return Order(number, details_link, invoice_link)
-
-
 def assert_object_arrays_equal(expected, actual):
     assert [vars(o) for o in expected] == [vars(o) for o in actual]
+
+
+def set_logging_level(level):
+    log.basicConfig(level=level)
