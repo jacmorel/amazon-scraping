@@ -1,4 +1,5 @@
 import logging as log
+import math
 import os
 from datetime import datetime
 from unittest.mock import patch
@@ -7,10 +8,15 @@ import pytest
 from selenium import webdriver
 
 from scraping.scrapers import OrderHistory, Order, OrderDetail, Transaction, PageIterator
+from utils.objects import recursive_vars
 
-log.basicConfig(level=log.DEBUG)
+# log.basicConfig(level=log.DEBUG)
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+ORDER_HISTORY_PAGE_1 = "order_history_p1.html"
+ORDER_HISTORY_PAGE_2 = "order_history_p2.html"
+ORDER_HISTORY_PAGE_7 = "order_history_p7.html"
 
 
 @pytest.fixture
@@ -27,15 +33,15 @@ def order():
 
 
 @pytest.mark.parametrize("current, next", [
-    ['order_history_p1.html',
+    [ORDER_HISTORY_PAGE_1,
      'https://www.amazon.com/your-orders/orders?timeFilter=year-2024&startIndex=10&ref_=ppx_yo2ov_dt_b_pagination_1_2'],
-    ['order_history_p2.html',
+    [ORDER_HISTORY_PAGE_2,
      'https://www.amazon.com/gp/product/B0BFG45YJ9/ref=ppx_yo_dt_b_asin_title_o07_s03?ie=UTF8&psc=1'],
 ])
 def test_page_iterator(driver, current, next):
-    load_page(driver, ['order_history', current])
+    load_page(driver, current)
 
-    with patch.object(PageIterator, "get", return_value=None) as mock_get:
+    with patch.object(PageIterator, "get_page", return_value=None) as mock_get:
         it = PageIterator(OrderHistory(driver))
         it.__iter__()
         it.__next__()
@@ -44,7 +50,7 @@ def test_page_iterator(driver, current, next):
 
 
 def test_page_iterator_on_last_page(driver):
-    load_page(driver, ['order_history', 'order_history_p7.html'])
+    load_page(driver, ORDER_HISTORY_PAGE_7)
 
     with pytest.raises(StopIteration):
         it = PageIterator(OrderHistory(driver))
@@ -52,8 +58,128 @@ def test_page_iterator_on_last_page(driver):
         it.__next__()
 
 
-def test_get_current_page_orders(driver):
-    load_page(driver, ['order_history', 'order_history_p1.html'])
+def test_order_history_get_all_orders(driver):
+    load_page(driver, ORDER_HISTORY_PAGE_1)
+
+    with patch.object(PageIterator,
+                      "get_next_page_link",
+                      side_effect=[get_test_page_link(ORDER_HISTORY_PAGE_2),
+                                   get_test_page_link(ORDER_HISTORY_PAGE_7)]), \
+            patch.object(OrderDetail, "populate") as mock_populate:
+        orders = OrderHistory(driver).get_all_orders()
+
+        assert_object_arrays_equal([
+            {
+                'details_link': 'https://www.amazon.com/gp/your-account/order-details/ref=ppx_yo_dt_b_order_details_o00?ie=UTF8&orderID=112-7980230-1111111',
+                'invoice_link': 'https://www.amazon.com/gp/css/summary/print.html/ref=ppx_yo_dt_b_invoice_o00?ie=UTF8&orderID=112-7980230-1111111',
+                'order_number': '112-7980230-1111111'},
+            {
+                'details_link': 'https://www.amazon.com/gp/your-account/order-details/ref=ppx_yo_dt_b_order_details_o01?ie=UTF8&orderID=114-2192237-1111111',
+                'invoice_link': 'https://www.amazon.com/gp/css/summary/print.html/ref=ppx_yo_dt_b_invoice_o01?ie=UTF8&orderID=114-2192237-1111111',
+                'order_number': '114-2192237-1111111'},
+            {
+                'details_link': 'https://www.amazon.com/gp/your-account/order-details/ref=ppx_yo_dt_b_order_details_o02?ie=UTF8&orderID=112-8291086-2222222',
+                'invoice_link': 'https://www.amazon.com/gp/css/summary/print.html/ref=ppx_yo_dt_b_invoice_o02?ie=UTF8&orderID=112-8291086-2222222',
+                'order_number': '112-8291086-2222222'},
+            {
+                'details_link': 'https://www.amazon.com/gp/your-account/order-details/ref=ppx_yo_dt_b_order_details_o03?ie=UTF8&orderID=112-0162431-3333333',
+                'invoice_link': 'https://www.amazon.com/gp/css/summary/print.html/ref=ppx_yo_dt_b_invoice_o03?ie=UTF8&orderID=112-0162431-3333333',
+                'order_number': '112-0162431-3333333'},
+            {
+                'details_link': 'https://www.amazon.com/gp/your-account/order-details/ref=ppx_yo_dt_b_order_details_o04?ie=UTF8&orderID=112-8282011-4444444',
+                'invoice_link': 'https://www.amazon.com/gp/css/summary/print.html/ref=ppx_yo_dt_b_invoice_o04?ie=UTF8&orderID=112-8282011-4444444',
+                'order_number': '112-8282011-4444444'},
+            {
+                'details_link': 'https://www.amazon.com/gp/your-account/order-details/ref=ppx_yo_dt_b_order_details_o05?ie=UTF8&orderID=112-7330075-5555555',
+                'invoice_link': 'https://www.amazon.com/gp/css/summary/print.html/ref=ppx_yo_dt_b_invoice_o05?ie=UTF8&orderID=112-7330075-5555555',
+                'order_number': '112-7330075-5555555'},
+            {
+                'details_link': 'https://www.amazon.com/gp/your-account/order-details/ref=ppx_yo_dt_b_order_details_o06?ie=UTF8&orderID=112-1902758-1111111',
+                'invoice_link': 'https://www.amazon.com/gp/css/summary/print.html/ref=ppx_yo_dt_b_invoice_o06?ie=UTF8&orderID=112-1902758-1111111',
+                'order_number': '112-1902758-1111111'},
+            {
+                'details_link': 'https://www.amazon.com/gp/your-account/order-details/ref=ppx_yo_dt_b_order_details_o07?ie=UTF8&orderID=112-9988160-2222222',
+                'invoice_link': 'https://www.amazon.com/gp/css/summary/print.html/ref=ppx_yo_dt_b_invoice_o07?ie=UTF8&orderID=112-9988160-2222222',
+                'order_number': '112-9988160-2222222'},
+            {
+                'details_link': 'https://www.amazon.com/gp/your-account/order-details/ref=ppx_yo_dt_b_order_details_o08?ie=UTF8&orderID=112-5388327-1111111',
+                'invoice_link': 'https://www.amazon.com/gp/css/summary/print.html/ref=ppx_yo_dt_b_invoice_o08?ie=UTF8&orderID=112-5388327-1111111',
+                'order_number': '112-5388327-1111111'},
+            {
+                'details_link': 'https://www.amazon.com/gp/your-account/order-details/ref=ppx_yo_dt_b_order_details_o09?ie=UTF8&orderID=112-9722039-1111111',
+                'invoice_link': 'https://www.amazon.com/gp/css/summary/print.html/ref=ppx_yo_dt_b_invoice_o09?ie=UTF8&orderID=112-9722039-1111111',
+                'order_number': '112-9722039-1111111'},
+            {
+                'details_link': 'https://www.amazon.com/gp/your-account/order-details/ref=ppx_yo_dt_b_order_details_o00?ie=UTF8&orderID=112-9722039-1111111',
+                'invoice_link': 'https://www.amazon.com/gp/css/summary/print.html/ref=ppx_yo_dt_b_invoice_o00?ie=UTF8&orderID=112-9722039-1111111',
+                'order_number': '112-9722039-1111111'},
+            {
+                'details_link': 'https://www.amazon.com/gp/your-account/order-details/ref=ppx_yo_dt_b_order_details_o01?ie=UTF8&orderID=112-4659380-1111111',
+                'invoice_link': 'https://www.amazon.com/gp/css/summary/print.html/ref=ppx_yo_dt_b_invoice_o01?ie=UTF8&orderID=112-4659380-1111111',
+                'order_number': '112-4659380-1111111'},
+            {
+                'details_link': 'https://www.amazon.com/gp/your-account/order-details/ref=ppx_yo_dt_b_order_details_o02?ie=UTF8&orderID=112-0301652-2222222',
+                'invoice_link': 'https://www.amazon.com/gp/css/summary/print.html/ref=ppx_yo_dt_b_invoice_o02?ie=UTF8&orderID=112-0301652-2222222',
+                'order_number': '112-0301652-2222222'},
+            {
+                'details_link': 'https://www.amazon.com/gp/your-account/order-details/ref=ppx_yo_dt_b_order_details_o03?ie=UTF8&orderID=113-0346717-3333333',
+                'invoice_link': 'https://www.amazon.com/gp/css/summary/print.html/ref=ppx_yo_dt_b_invoice_o03?ie=UTF8&orderID=113-0346717-3333333',
+                'order_number': '113-0346717-3333333'},
+            {
+                'details_link': 'https://www.amazon.com/gp/your-account/order-details/ref=ppx_yo_dt_b_order_details_o04?ie=UTF8&orderID=112-7543942-4444444',
+                'invoice_link': 'https://www.amazon.com/gp/css/summary/print.html/ref=ppx_yo_dt_b_invoice_o04?ie=UTF8&orderID=112-7543942-4444444',
+                'order_number': '112-7543942-4444444'},
+            {
+                'details_link': 'https://www.amazon.com/gp/your-account/order-details/ref=ppx_yo_dt_b_order_details_o05?ie=UTF8&orderID=112-6778897-5555555',
+                'invoice_link': 'https://www.amazon.com/gp/css/summary/print.html/ref=ppx_yo_dt_b_invoice_o05?ie=UTF8&orderID=112-6778897-5555555',
+                'order_number': '112-6778897-5555555'},
+            {
+                'details_link': 'https://www.amazon.com/gp/your-account/order-details/ref=ppx_yo_dt_b_order_details_o06?ie=UTF8&orderID=112-1960387-6666666',
+                'invoice_link': 'https://www.amazon.com/gp/css/summary/print.html/ref=ppx_yo_dt_b_invoice_o06?ie=UTF8&orderID=112-1960387-6666666',
+                'order_number': '112-1960387-6666666'},
+            {
+                'details_link': 'https://www.amazon.com/gp/your-account/order-details/ref=ppx_yo_dt_b_order_details_o07?ie=UTF8&orderID=112-9888447-7777777',
+                'invoice_link': 'https://www.amazon.com/gp/css/summary/print.html/ref=ppx_yo_dt_b_invoice_o07?ie=UTF8&orderID=112-9888447-7777777',
+                'order_number': '112-9888447-7777777'},
+            {
+                'details_link': 'https://www.amazon.com/gp/your-account/order-details/ref=ppx_yo_dt_b_order_details_o08?ie=UTF8&orderID=112-8952643-8888888',
+                'invoice_link': 'https://www.amazon.com/gp/css/summary/print.html/ref=ppx_yo_dt_b_invoice_o08?ie=UTF8&orderID=112-8952643-8888888',
+                'order_number': '112-8952643-8888888'},
+            {
+                'details_link': 'https://www.amazon.com/gp/your-account/order-details/ref=ppx_yo_dt_b_order_details_o09?ie=UTF8&orderID=112-9065471-9999999',
+                'invoice_link': 'https://www.amazon.com/gp/css/summary/print.html/ref=ppx_yo_dt_b_invoice_o09?ie=UTF8&orderID=112-9065471-9999999',
+                'order_number': '112-9065471-9999999'},
+            {
+                'details_link': 'https://www.amazon.com/gp/your-account/order-details/ref=ppx_yo_dt_b_order_details_o00?ie=UTF8&orderID=112-3194835-1111111',
+                'invoice_link': 'https://www.amazon.com/gp/css/summary/print.html/ref=ppx_yo_dt_b_invoice_o00?ie=UTF8&orderID=112-3194835-1111111',
+                'order_number': '112-3194835-1111111'}], orders, True)
+
+        assert [args[0][0].order_number for args in mock_populate.call_args_list] == [
+            "112-7980230-1111111",
+            "114-2192237-1111111",
+            "112-8291086-2222222",
+            "112-0162431-3333333",
+            "112-8282011-4444444",
+            "112-7330075-5555555",
+            "112-1902758-1111111",
+            "112-9988160-2222222",
+            "112-5388327-1111111",
+            "112-9722039-1111111",
+            "112-9722039-1111111",
+            "112-4659380-1111111",
+            "112-0301652-2222222",
+            "113-0346717-3333333",
+            "112-7543942-4444444",
+            "112-6778897-5555555",
+            "112-1960387-6666666",
+            "112-9888447-7777777",
+            "112-8952643-8888888",
+            "112-9065471-9999999",
+            "112-3194835-1111111"]
+
+
+def test_order_history_get_current_page_orders(driver):
+    load_page(driver, ORDER_HISTORY_PAGE_1)
 
     orders = OrderHistory(driver).get_current_page_orders()
 
@@ -93,7 +219,7 @@ def test_get_current_page_orders(driver):
 def test_order_details_populate_address(driver, order):
     load_page(driver, ['order_details', 'shipping_address.html'])
 
-    OrderDetail(driver, order).populate_address()
+    get_order_detail(driver, order).populate_address()
 
     assert vars(order.shipping_address) == {'full_name': 'Hermione Granger',
                                             'street': '1111 MAIN ST',
@@ -102,27 +228,40 @@ def test_order_details_populate_address(driver, order):
                                             }
 
 
+def get_order_detail(driver, order):
+    order_detail = OrderDetail(driver)
+    order_detail.order = order
+    return order_detail
+
+
 def test_order_details_populate_payment(driver, order):
     load_page(driver, ['order_details', 'payment_method.html'])
 
-    OrderDetail(driver, order).populate_payment()
+    get_order_detail(driver, order).populate_payment()
 
     assert order.payment_credit_card == "0001"
+
+
+def assert_float_equals(actual, expected):
+    assert math.isclose(actual, expected, rel_tol=1e-7)
 
 
 def test_order_details_populate_summary(driver, order):
     load_page(driver, ['order_details', 'order_summary.html'])
 
-    OrderDetail(driver, order).populate_summary()
+    get_order_detail(driver, order).populate_summary()
 
-    assert order.items_subtotal_amount == 230.00
-    assert order.shipping_amount == 2.00
-    assert order.tax_amount == 18.98
-    assert order.gift_card_amount == 249.98
-    assert order.grand_total_amount == 1.00
-    assert order.items_refund_amount == 230.00
-    assert order.tax_refund_amount == 17.98
-    assert order.total_refund_amount == 248.98
+    assert_float_equals(order.items_subtotal_amount, 230.00)
+    assert_float_equals(order.shipping_amount, 2.00)
+    assert_float_equals(order.tax_amount, 18.98)
+    assert_float_equals(order.gift_card_amount, 249.98)
+    assert_float_equals(order.grand_total_amount, 1.00)
+    assert_float_equals(order.items_refund_amount, 230.00)
+    assert_float_equals(order.tax_refund_amount, 17.98)
+    assert_float_equals(order.total_refund_amount, 248.98)
+    assert_float_equals(order.coupon_savings, 8.44)  # testing addition of 2 coupons
+    assert_float_equals(order.subscription_savings, 0.92)
+    assert_float_equals(order.shipping_savings, 2.99)
 
 
 def test_order_details_populate_summary_refund(driver, order):
@@ -130,7 +269,7 @@ def test_order_details_populate_summary_refund(driver, order):
 
     load_page(driver, ['order_details', 'order_summary_refund_section.html'])
 
-    OrderDetail(driver, order).populate_summary()
+    get_order_detail(driver, order).populate_summary()
 
     assert order.items_refund_amount == 230.00
     assert order.tax_refund_amount == 17.98
@@ -140,7 +279,7 @@ def test_order_details_populate_summary_refund(driver, order):
 def test_order_details_populate_transactions(driver, order):
     load_page(driver, ['order_details', 'transactions.html'])
 
-    OrderDetail(driver, order).populate_transactions()
+    get_order_detail(driver, order).populate_transactions()
 
     assert_object_arrays_equal([
         Transaction(datetime(2024, 2, 25, 0, 0), 22.59, None),
@@ -156,7 +295,7 @@ def test_order_details_populate_transactions(driver, order):
      "Transaction(date=None, amount=0, cc_last_4='Unparseable refund: Refund:  25, 2024 - $22.59')"]
 ])
 def test_extract_refund(driver, order, line, expected):
-    order_detail = OrderDetail(driver, order)
+    order_detail = get_order_detail(driver, order)
     tx = order_detail.extract_refund(line)
     assert expected == str(tx)
 
@@ -170,19 +309,111 @@ def test_extract_refund(driver, order, line, expected):
      "Transaction(date=None, amount=0, cc_last_4='Unparseable payment: February 14, 2024 - Visa ending in : $55.04')"]
 ])
 def test_extract_payment(driver, order, line, expected):
-    order_detail = OrderDetail(driver, order)
+    order_detail = get_order_detail(driver, order)
     tx = order_detail.extract_payment(line)
     assert expected == str(tx)
 
 
+def test_order_details_populate(driver, order):
+    order.details_link = get_test_page_link('order_details_3_items_received_1_refunded_2_txs_coupon.html')
+
+    OrderDetail(driver).populate(order)
+
+    assert recursive_vars(order) == {
+        'coupon_savings': 5.22,
+        'details_link': 'file:///Users/jacques/dev/amazon-scraping/test_pages/order_details/order_details_3_items_received_1_refunded_2_txs_coupon.html',
+        'gift_card_amount': None,
+        'grand_total_amount': 65.85,
+        'invoice_link': None,
+        'items_refund_amount': None,
+        'items_subtotal_amount': 66.06,
+        'order_number': '1',
+        'payment_credit_card': '0002',
+        'shipping_address': {'city_state_postal': 'LITTLE WHINGING, SU 12345-3453',
+                             'country': 'United Kingdom',
+                             'full_name': 'Harry Potter',
+                             'street': '4 PRIVET DRIVE'},
+        'shipping_amount': 2.99,
+        'subscription_savings': None,
+        'shipping_savings': 2.99,
+        'tax_amount': 5.01,
+        'tax_refund_amount': None,
+        'total_before_tax_amount': 60.84,
+        'total_refund_amount': 22.59,
+        'transactions': [{'amount': 22.59,
+                          'cc_last_4': None,
+                          'date': datetime(2024, 2, 25, 0, 0)},
+                         {'amount': -55.04,
+                          'cc_last_4': '0002',
+                          'date': datetime(2024, 2, 14, 0, 0)},
+                         {'amount': -10.81,
+                          'cc_last_4': '0002',
+                          'date': datetime(2024, 2, 14, 0, 0)}]
+    }
+
+
 def load_page(driver, relative_path_elements):
+    link = get_test_page_link(relative_path_elements)
+    driver.get(link)
+
+
+def get_test_page_link(relative_path_elements):
+    if isinstance(relative_path_elements, str):
+        relative_path_elements = prepend_test_directory(relative_path_elements)
+
     path_elements = ['test_pages'] + relative_path_elements
-    test_file_path = os.path.join(BASE_DIR, *path_elements)
-    driver.get(f'file://{test_file_path}')
+    return f'file://{os.path.join(BASE_DIR, *path_elements)}'
 
 
-def assert_object_arrays_equal(expected, actual):
-    assert [vars(o) for o in expected] == [vars(o) for o in actual]
+def prepend_test_directory(file_name: str):
+    pages = ["order_details", "order_history"]
+    for page in pages:
+        if file_name.startswith(page):
+            return [page, file_name]
+    raise Exception("type of screen not understood")
+
+
+def assert_object_arrays_equal(expected, actual, ignore_none=False):
+    assert [recursive_vars(o, ignore_none) for o in expected] == [recursive_vars(o, ignore_none) for o in actual]
+
+
+def test_recursive_vars():
+    order = Order("1", "details", "invoice")
+    order.transactions = [Transaction("1/1/1", 1.0, "0001"),
+                          Transaction("1/2/1", 2.0, "0002")]
+
+    assert recursive_vars(order) == {'coupon_savings': None,
+                                     'details_link': 'details',
+                                     'gift_card_amount': None,
+                                     'grand_total_amount': None,
+                                     'invoice_link': 'invoice',
+                                     'items_refund_amount': None,
+                                     'items_subtotal_amount': None,
+                                     'order_number': '1',
+                                     'payment_credit_card': None,
+                                     'shipping_address': None,
+                                     'shipping_amount': None,
+                                     'subscription_savings': None,
+                                     'shipping_savings': None,
+                                     'tax_amount': None,
+                                     'tax_refund_amount': None,
+                                     'total_before_tax_amount': None,
+                                     'total_refund_amount': None,
+                                     'transactions': [{'amount': 1.0, 'cc_last_4': '0001', 'date': '1/1/1'},
+                                                      {'amount': 2.0, 'cc_last_4': '0002', 'date': '1/2/1'}]}
+
+
+def test_recursive_vars_ignore_non():
+    order = Order("1", "details", "invoice")
+    order.transactions = [Transaction("1/1/1", 1.0, "0001"),
+                          Transaction("1/2/1", 2.0, "0002")]
+
+    assert recursive_vars(order, True) == {
+        'details_link': 'details',
+        'invoice_link': 'invoice',
+        'order_number': '1',
+        'transactions': [{'amount': 1.0, 'cc_last_4': '0001', 'date': '1/1/1'},
+                         {'amount': 2.0, 'cc_last_4': '0002', 'date': '1/2/1'}]}
 
 
 def set_logging_level(level):

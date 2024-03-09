@@ -8,6 +8,8 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.remote.webelement import WebElement
 from selenium.webdriver.support.select import Select
 
+from utils.objects import recursive_vars
+
 ITEMS_SHIPPED = "Items shipped:"
 ITEMS_SHIPPED_LEN = len(ITEMS_SHIPPED)
 
@@ -29,6 +31,9 @@ class Order:
         self.tax_refund_amount = None
         self.total_refund_amount = None
         self.transactions = None
+        self.coupon_savings = None
+        self.subscription_savings = None
+        self.shipping_savings = None
 
     def __repr__(self):
         return f"Order(number={self.order_number!r}, details={self.details_link!r}, invoice={self.invoice_link!r})"
@@ -53,8 +58,8 @@ class Address:
 
 
 class Scraper:
-    def __init__(self, driver: ChromiumDriver):
-        self.driver = driver
+    def __init__(self, driver_or_scraper):
+        self.driver = driver_or_scraper.driver if isinstance(driver_or_scraper, Scraper) else driver_or_scraper
 
     def find_element_by_id(self, value: str, parent: WebElement = None) -> WebElement:
         return self.driver_if_null(parent).find_element(by=By.ID, value=value)
@@ -80,10 +85,14 @@ class Scraper:
     def wait_for_input(self):
         input("Press Enter to continue: ")
 
+    def get_page(self, url):
+        log.info("Loading page %s", url)
+        self.driver.get(url)
+
 
 class Login(Scraper):
-    def __init__(self, driver: ChromiumDriver, email, password):
-        super().__init__(driver)
+    def __init__(self, driver_or_scraper, email, password):
+        super().__init__(driver_or_scraper)
         self.email = email
         self.password = password
 
@@ -112,13 +121,23 @@ class Login(Scraper):
 
 
 class OrderHistory(Scraper):
-    def get_orders(self):
-        self.driver.get("https://www.amazon.com/gp/your-account/order-history")
-        self.filter_orders("2024")
+    def __init__(self, driver_or_scraper, order_detail_scraper=None):
+        super().__init__(driver_or_scraper)
+        self.order_detail_scraper = order_detail_scraper if order_detail_scraper is not None else OrderDetail(self)
+
+    def get_orders(self, year="2024"):
+        self.get_page("https://www.amazon.com/gp/your-account/order-history")
+        self.filter_orders(year)
         return self.get_all_orders()
 
     def get_all_orders(self):
-        orders = []
+        orders = self.get_all_orders_from_history()
+        for o in orders:
+            self.order_detail_scraper.populate(o)
+        return orders
+
+    def get_all_orders_from_history(self):
+        orders = [self.get_current_page_orders()]
         iterator = PageIterator(self)
         for page in iterator:
             orders.append(self.get_current_page_orders())
@@ -139,7 +158,7 @@ class OrderHistory(Scraper):
         order = Order(self.get_order_number(element),
                       self.get_order_details_link(element),
                       self.get_order_invoice_link(element))
-        log.info("Order number: %s", order.order_number)
+        log.info("Added order number: %s", order.order_number)
         return order
 
     def get_order_number(self, order_card):
@@ -161,20 +180,17 @@ class OrderHistory(Scraper):
 
 class PageIterator(Scraper):
     def __init__(self, scraper):
-        super().__init__(scraper.driver)
+        super().__init__(scraper)
 
     def __iter__(self):
-        pass
+        return self
 
     def __next__(self):
         next_link = self.get_next_page_link()
         if next_link is None:
             raise StopIteration
         else:
-            self.get(next_link)
-
-    def get(self, link):
-        self.driver.get(link)
+            self.get_page(next_link)
 
     def get_next_page_link(self):
         arefs = self.find_elements_by_xpath("//a[contains(text(), 'Next')]")
@@ -184,17 +200,22 @@ class PageIterator(Scraper):
 
 
 class OrderDetail(Scraper):
-    def __init__(self, driver: ChromiumDriver, order: Order = None):
-        super().__init__(driver)
-        self.order = order
+    def __init__(self, driver_or_scraper):
+        super().__init__(driver_or_scraper)
+        self.order = None
 
-    def populate(self, order):
+    def populate(self, order: Order):
         self.order = order
-        self.driver.get(order.details_link)
+        log.info("Populating order %s", order.order_number)
+        self.go_to_order_details()
         self.populate_summary()
         self.populate_transactions()
         self.populate_address()
         self.populate_payment()
+        log.info("order = %s", recursive_vars(self.order))
+
+    def go_to_order_details(self):
+        self.get_page(self.order.details_link)
 
     def populate_payment(self):
         div_text = self.find_element_by_css('div.pmts-payments-instrument-details').text
@@ -214,23 +235,27 @@ class OrderDetail(Scraper):
         self.order.shipping_address = Address(full_name, street, city_state_postal, country)
 
     AMOUNT_MAPPINGS = {
-        "Item(s) Subtotal:": "items_subtotal_amount",
-        "Shipping & Handling:": "shipping_amount",
-        "Total before tax:": "total_before_tax_amount",
-        "Estimated tax to be collected:": "tax_amount",
-        "Gift Card Amount:": "gift_card_amount",
-        "Grand Total:": "grand_total_amount",
-        "Item(s) refund:": "items_refund_amount",
-        "Tax refund:": "tax_refund_amount",
-        "Refund Total:": "total_refund_amount",
-        "Refund Total": "total_refund_amount"
+        # Title                              Field                      Negate?
+        "Item(s) Subtotal:":                ["items_subtotal_amount",   False],
+        "Shipping & Handling:":             ["shipping_amount",         False],
+        "Total before tax:":                ["total_before_tax_amount", False],
+        "Estimated tax to be collected:":   ["tax_amount",              False],
+        "Gift Card Amount:":                ["gift_card_amount",        True],
+        "Grand Total:":                     ["grand_total_amount",      False],
+        "Item(s) refund:":                  ["items_refund_amount",     False],
+        "Tax refund:":                      ["tax_refund_amount",       False],
+        "Refund Total:":                    ["total_refund_amount",     False],
+        "Refund Total":                     ["total_refund_amount",     False],
+        "Your Coupon Savings:":             ["coupon_savings",          True],
+        "Subscribe & Save:":                ["subscription_savings",    True],
+        "Free Shipping:":                   ["shipping_savings",        True],
     }
 
     def populate_summary(self):
         amounts_divs = self.find_elements_by_xpath('//div[@id="od-subtotals"]//div[@class="a-row"]')
         for amount_div in amounts_divs:
             try:
-                log.info("Processing amount div: %s", amount_div.get_attribute("outerHTML"))
+                log.debug("Processing amount div: %s", amount_div.get_attribute("outerHTML"))
                 title_div = self.find_element_by_xpath('(./div/span)[1]', amount_div)
                 title_div_children = self.find_elements_by_xpath('./*', title_div)
                 if len(title_div_children) == 0:
@@ -239,13 +264,19 @@ class OrderDetail(Scraper):
                     title = title_div_children[0].text.strip()
                 value = (self.find_element_by_xpath('(./div/span)[2]', amount_div).
                          text.strip().replace("$", ""))
-                setattr(self.order, self.AMOUNT_MAPPINGS[title], float(value))
+                self.increment_field_value(self.AMOUNT_MAPPINGS[title], float(value))
             except Exception as e:
                 log.error("Problem on order '%s' getting amount '%s' of '%s': %s(%s)",
                           self.order.order_number, title, value, type(e).__name__, str(e))
-            finally:
-                if self.order.gift_card_amount is not None:
-                    self.order.gift_card_amount = - self.order.gift_card_amount
+
+    def increment_field_value(self, args, value):
+        field_name = args[0]
+        negate = args[1]
+        field_value = getattr(self.order, field_name)
+        negated_value = -value if negate else value
+        incremented_value = negated_value if field_value is None else float(field_value) + negated_value
+        setattr(self.order, field_name, incremented_value)
+        log.debug("Setting field '%s' to '%s'", field_name, getattr(self.order, field_name))
 
     def populate_transactions(self):
         transactions_div = self.find_element_by_xpath("//span[contains(text(),'Transactions')]/../../div")

@@ -5,7 +5,7 @@ from scraping.scrapers import Login, OrderHistory
 from onepassword.client import get_item_fields
 import logging as log
 
-log.basicConfig(level=log.DEBUG)
+log.basicConfig(level=log.INFO)
 
 email, password = get_item_fields("ServiceAccount", "Amazon", ["username", "password"])
 

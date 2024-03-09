@@ -1,9 +1,5 @@
 import subprocess
 import json
-import logging as log
-
-log.basicConfig(level=log.DEBUG)
-
 
 def get_item_fields(vault, item_name, fields):
     """
