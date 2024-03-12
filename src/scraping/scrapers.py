@@ -2,6 +2,7 @@ import itertools
 import logging
 import re
 from datetime import datetime
+from time import sleep
 
 from selenium import webdriver
 from selenium.common import NoSuchElementException
@@ -60,11 +61,29 @@ class Scraper:
     def find_element_by_class(self, value: str, parent: WebElement = None) -> WebElement:
         return self.driver_if_null(parent).find_element(by=By.CLASS_NAME, value=value)
 
+    def find_element_by_class_safely(self, value: str, parent: WebElement = None) -> WebElement:
+        try:
+            return self.find_element_by_class(value, parent)
+        except NoSuchElementException:
+            return None
+
     def find_element_by_css(self, value: str, parent: WebElement = None) -> WebElement:
         return self.driver_if_null(parent).find_element(by=By.CSS_SELECTOR, value=value)
 
+    def find_element_by_css_safely(self, value: str, parent: WebElement = None) -> WebElement:
+        try:
+            return self.find_element_by_css(value, parent)
+        except NoSuchElementException:
+            return None
+
     def find_element_by_xpath(self, value: str, parent: WebElement = None) -> WebElement:
         return self.driver_if_null(parent).find_element(by=By.XPATH, value=value)
+
+    def find_element_by_xpath_safely(self, value: str, parent: WebElement = None) -> WebElement:
+        try:
+            return self.find_element_by_xpath(value, parent)
+        except NoSuchElementException:
+            return None
 
     def find_elements_by_class(self, value: str) -> [WebElement]:
         return self.driver.find_elements(by=By.CLASS_NAME, value=value)
@@ -79,14 +98,16 @@ class Scraper:
     def wait_for_input(self):
         input("Press Enter to continue: ")
 
-    def get_page(self, url):
+    def get_page(self, url, wait_args=None):
         log.info("Loading page %s", url)
         with Timing(f"Loading page {url}", True):
             self.driver.get(url)
-            self.wait_for_page_load()
+            self.wait_for_page_load(wait_args)
 
-    def wait_for_page_load(self):
-        WebDriverWait(self.driver, 10).until(lambda x: x.find_element(By.TAG_NAME, "body"))
+    def wait_for_page_load(self, args=None):
+        if args is None:
+            args = [By.TAG_NAME, "body"]
+        WebDriverWait(self.driver, 10).until(lambda x: x.find_element(*args))
 
 
 class ScrapingContext(Scraper):
@@ -182,12 +203,12 @@ class OrderHistory(Scraper):
             self.filter_orders(year)
             orders.append(self.get_orders_from_history())
         if full_orders:
-            self.get_orders_details(orders)
+            self.get_orders_details(list(itertools.chain(*orders)))
         return orders
 
     def get_orders_from_history(self):
         orders = [self.get_current_page_orders()]
-        iterator = PageIterator(self)
+        iterator = PageIterator(self, [By.ID, "rhf"])
         for page in iterator:
             orders.append(self.get_current_page_orders())
         return list(itertools.chain(*orders))
@@ -196,7 +217,7 @@ class OrderHistory(Scraper):
         order_count = len(orders)
         log.info("Populating %d orders" % order_count)
         for i, o in enumerate(orders):
-            log.info("Populating order #%d/%d: %s", i, order_count, o.order_number)
+            log.info("Populating order #%d/%d: %s", i, order_count, o.number)
             self.order_detail_scraper.populate(o)
         return orders
 
@@ -213,28 +234,55 @@ class OrderHistory(Scraper):
 
     def get_order_card(self, element):
         order = Order(self.get_order_number(element),
+                      self.get_ordered_date(element),
                       self.get_order_details_link(element),
                       self.get_order_invoice_link(element))
-        log.info("Added order number: %s", order.order_number)
+        log.info("Added order number: %s", order.number)
         return order
 
     def get_order_number(self, order_card):
-        element = self.find_element_by_css(".yohtmlc-order-id .a-color-secondary.value bdi", order_card)
+        element = self.find_element_by_css_safely(".yohtmlc-order-id .a-color-secondary.value bdi", order_card)
+        if element is None:
+            log.error("Order number could not be found: " + order_card.text)
+            return None
         return element.text
 
-    def get_order_details_link(self, order_card):
-        element = self.find_element_by_class("yohtmlc-order-details-link", order_card)
-        return element.get_property("href")
+    def get_ordered_date(self, order_card):
+        element = self.find_element_by_xpath_safely(
+            ".//span[contains(text(), 'Order placed')]/../following-sibling::*[1]", order_card)
+        if element is None:
+            log.error("Order date could not be found")
+            return None
+        date_string = element.text
+        try:
+            return datetime.strptime(date_string, "%B %d, %Y")
+        except ValueError as e:
+            log.error("Order date could not be parsed: %s", e)
+            return date_string
 
-    @staticmethod
-    def get_order_invoice_link(order_card):
-        element = order_card.find_element(By.LINK_TEXT, 'View invoice')
-        return element.get_property("href")
+    def get_order_details_link(self, order_card):
+        element = self.find_element_by_class_safely("yohtmlc-order-details-link", order_card)
+        if element is None:
+            log.error("Details link could not be found")
+            return None
+        else:
+            return element.get_property("href")
+
+    def get_order_invoice_link(self, order_card):
+        element = self.find_element_safely(By.LINK_TEXT, 'View invoice', order_card)
+        if element is None:
+            element = self.find_element_safely(By.LINK_TEXT, 'Invoice', order_card)  # French order
+        elif element is None:
+            log.error("Invoice link could not be found")
+            return None
+        else:
+            return element.get_property("href")
 
 
 class PageIterator(Scraper):
-    def __init__(self, scraper):
+    def __init__(self, scraper, wait_args=None):
         super().__init__(scraper)
+        self.wait_args = wait_args
 
     def __iter__(self):
         return self
@@ -244,7 +292,7 @@ class PageIterator(Scraper):
         if next_link is None:
             raise StopIteration
         else:
-            self.get_page(next_link)
+            self.get_page(next_link, self.wait_args)
 
     def get_next_page_link(self):
         arefs = self.find_elements_by_xpath("//ul[@class='a-pagination']//a[starts-with(text(), 'Next')]")
@@ -279,12 +327,12 @@ class OrderDetail(Scraper):
     def populate_payment_method(self, summary_div):
         payment_blocks = self.find_elements_by_xpath(".//*[contains(text(), 'Payment ')]", summary_div)
         if len(payment_blocks) == 0:
-            log.error("Order #%s: Could not find any payment method", self.order.order_number)
+            log.error("Order #%s: Could not find any payment method", self.order.number)
             return
 
         payment_method_title_element = payment_blocks[0]
         if payment_method_title_element.text.strip().lower() != "payment method":
-            log.error("Order #%s: Could not find any payment method", self.order.order_number)
+            log.error("Order #%s: Could not find any payment method", self.order.number)
             return
 
         parent = self.find_element_by_xpath("../..", payment_method_title_element)
@@ -347,7 +395,7 @@ class OrderDetail(Scraper):
                 self.increment_field_value(self.AMOUNT_MAPPINGS[title], float(value))
             except Exception as e:
                 log.error("Problem on order '%s' getting amount '%s' of '%s': %s(%s)",
-                          self.order.order_number, title, value, type(e).__name__, str(e))
+                          self.order.number, title, value, type(e).__name__, str(e))
 
     def increment_field_value(self, args, value):
         field_name = args[0]
@@ -383,7 +431,7 @@ class OrderDetail(Scraper):
                     line = line.replace(ITEMS_SHIPPED, "")
                 tx = self.extract_payment(line)
             else:
-                log.error("Order # %s: could not parse transaction '%s'", self.order.order_number, line)
+                log.error("Order # %s: could not parse transaction '%s'", self.order.number, line)
             if tx is not None:
                 transactions.append(tx)
             i += 1
@@ -393,7 +441,7 @@ class OrderDetail(Scraper):
         date_match = self.match_date(line)
         amount_match = self.match_amount(line)
         if not date_match or not amount_match:
-            log.error("Could not parse Refund for order %s: '%s'", self.order.order_number, line)
+            log.error("Could not parse Refund for order %s: '%s'", self.order.number, line)
             return Transaction(None, 0, "Unparseable refund: " + line)
         date_obj = datetime.strptime(date_match.group(1), '%B %d, %Y')
         amount_float = float(amount_match.group(1))
@@ -404,7 +452,7 @@ class OrderDetail(Scraper):
         amount_match = self.match_amount(line)
         cc_last_4_match = self.match_credit_card(line)
         if not date_match or not amount_match or not cc_last_4_match:
-            log.error("Could not parse Payment for order %s: '%s'", self.order.order_number, line)
+            log.error("Could not parse Payment for order %s: '%s'", self.order.number, line)
             return Transaction(None, 0, "Unparseable payment: " + line)
         date_obj = datetime.strptime(date_match.group(1), '%B %d, %Y')
         amount_float = float(amount_match.group(1))

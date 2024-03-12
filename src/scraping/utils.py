@@ -58,7 +58,7 @@ def create_driver_with_default_options():
     chrome_prefs = {"profile.managed_default_content_settings.images": 2,
                     "profile.managed_default_content_settings.javascript": 2,
                     "permissions.default.stylesheet": 2}
-    # options.add_experimental_option("prefs", chrome_prefs)
+    options.add_experimental_option("prefs", chrome_prefs)
     return create_driver(options)
 
 

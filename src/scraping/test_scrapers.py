@@ -7,7 +7,7 @@ from unittest.mock import patch
 import pytest
 from selenium.webdriver.common.by import By
 
-from scraping.model import Transaction, Order
+from scraping.model import Transaction, Order, OrderStatus
 from scraping.scrapers import OrderHistory, OrderDetail, PageIterator, Login, CAPTCHA1, CAPTCHA2
 from scraping.utils import create_driver_with_default_options
 from utils.objects import recursive_vars
@@ -30,7 +30,7 @@ def driver():
 
 @pytest.fixture
 def order():
-    return Order("1", None, None)
+    return Order("1", None, None, None)
 
 
 @pytest.mark.parametrize("link, captcha, img", [
@@ -110,89 +110,89 @@ def test_order_history_get_all_orders(driver):
             {
                 'details_link': 'https://www.amazon.com/gp/your-account/order-details/ref=ppx_yo_dt_b_order_details_o00?ie=UTF8&orderID=112-7980230-1111111',
                 'invoice_link': 'https://www.amazon.com/gp/css/summary/print.html/ref=ppx_yo_dt_b_invoice_o00?ie=UTF8&orderID=112-7980230-1111111',
-                'order_number': '112-7980230-1111111'},
+                'number': '112-7980230-1111111'},
             {
                 'details_link': 'https://www.amazon.com/gp/your-account/order-details/ref=ppx_yo_dt_b_order_details_o01?ie=UTF8&orderID=114-2192237-1111111',
                 'invoice_link': 'https://www.amazon.com/gp/css/summary/print.html/ref=ppx_yo_dt_b_invoice_o01?ie=UTF8&orderID=114-2192237-1111111',
-                'order_number': '114-2192237-1111111'},
+                'number': '114-2192237-1111111'},
             {
                 'details_link': 'https://www.amazon.com/gp/your-account/order-details/ref=ppx_yo_dt_b_order_details_o02?ie=UTF8&orderID=112-8291086-2222222',
                 'invoice_link': 'https://www.amazon.com/gp/css/summary/print.html/ref=ppx_yo_dt_b_invoice_o02?ie=UTF8&orderID=112-8291086-2222222',
-                'order_number': '112-8291086-2222222'},
+                'number': '112-8291086-2222222'},
             {
                 'details_link': 'https://www.amazon.com/gp/your-account/order-details/ref=ppx_yo_dt_b_order_details_o03?ie=UTF8&orderID=112-0162431-3333333',
                 'invoice_link': 'https://www.amazon.com/gp/css/summary/print.html/ref=ppx_yo_dt_b_invoice_o03?ie=UTF8&orderID=112-0162431-3333333',
-                'order_number': '112-0162431-3333333'},
+                'number': '112-0162431-3333333'},
             {
                 'details_link': 'https://www.amazon.com/gp/your-account/order-details/ref=ppx_yo_dt_b_order_details_o04?ie=UTF8&orderID=112-8282011-4444444',
                 'invoice_link': 'https://www.amazon.com/gp/css/summary/print.html/ref=ppx_yo_dt_b_invoice_o04?ie=UTF8&orderID=112-8282011-4444444',
-                'order_number': '112-8282011-4444444'},
+                'number': '112-8282011-4444444'},
             {
                 'details_link': 'https://www.amazon.com/gp/your-account/order-details/ref=ppx_yo_dt_b_order_details_o05?ie=UTF8&orderID=112-7330075-5555555',
                 'invoice_link': 'https://www.amazon.com/gp/css/summary/print.html/ref=ppx_yo_dt_b_invoice_o05?ie=UTF8&orderID=112-7330075-5555555',
-                'order_number': '112-7330075-5555555'},
+                'number': '112-7330075-5555555'},
             {
                 'details_link': 'https://www.amazon.com/gp/your-account/order-details/ref=ppx_yo_dt_b_order_details_o06?ie=UTF8&orderID=112-1902758-1111111',
                 'invoice_link': 'https://www.amazon.com/gp/css/summary/print.html/ref=ppx_yo_dt_b_invoice_o06?ie=UTF8&orderID=112-1902758-1111111',
-                'order_number': '112-1902758-1111111'},
+                'number': '112-1902758-1111111'},
             {
                 'details_link': 'https://www.amazon.com/gp/your-account/order-details/ref=ppx_yo_dt_b_order_details_o07?ie=UTF8&orderID=112-9988160-2222222',
                 'invoice_link': 'https://www.amazon.com/gp/css/summary/print.html/ref=ppx_yo_dt_b_invoice_o07?ie=UTF8&orderID=112-9988160-2222222',
-                'order_number': '112-9988160-2222222'},
+                'number': '112-9988160-2222222'},
             {
                 'details_link': 'https://www.amazon.com/gp/your-account/order-details/ref=ppx_yo_dt_b_order_details_o08?ie=UTF8&orderID=112-5388327-1111111',
                 'invoice_link': 'https://www.amazon.com/gp/css/summary/print.html/ref=ppx_yo_dt_b_invoice_o08?ie=UTF8&orderID=112-5388327-1111111',
-                'order_number': '112-5388327-1111111'},
+                'number': '112-5388327-1111111'},
             {
                 'details_link': 'https://www.amazon.com/gp/your-account/order-details/ref=ppx_yo_dt_b_order_details_o09?ie=UTF8&orderID=112-9722039-1111111',
                 'invoice_link': 'https://www.amazon.com/gp/css/summary/print.html/ref=ppx_yo_dt_b_invoice_o09?ie=UTF8&orderID=112-9722039-1111111',
-                'order_number': '112-9722039-1111111'},
+                'number': '112-9722039-1111111'},
             {
                 'details_link': 'https://www.amazon.com/gp/your-account/order-details/ref=ppx_yo_dt_b_order_details_o00?ie=UTF8&orderID=112-9722039-1111111',
                 'invoice_link': 'https://www.amazon.com/gp/css/summary/print.html/ref=ppx_yo_dt_b_invoice_o00?ie=UTF8&orderID=112-9722039-1111111',
-                'order_number': '112-9722039-1111111'},
+                'number': '112-9722039-1111111'},
             {
                 'details_link': 'https://www.amazon.com/gp/your-account/order-details/ref=ppx_yo_dt_b_order_details_o01?ie=UTF8&orderID=112-4659380-1111111',
                 'invoice_link': 'https://www.amazon.com/gp/css/summary/print.html/ref=ppx_yo_dt_b_invoice_o01?ie=UTF8&orderID=112-4659380-1111111',
-                'order_number': '112-4659380-1111111'},
+                'number': '112-4659380-1111111'},
             {
                 'details_link': 'https://www.amazon.com/gp/your-account/order-details/ref=ppx_yo_dt_b_order_details_o02?ie=UTF8&orderID=112-0301652-2222222',
                 'invoice_link': 'https://www.amazon.com/gp/css/summary/print.html/ref=ppx_yo_dt_b_invoice_o02?ie=UTF8&orderID=112-0301652-2222222',
-                'order_number': '112-0301652-2222222'},
+                'number': '112-0301652-2222222'},
             {
                 'details_link': 'https://www.amazon.com/gp/your-account/order-details/ref=ppx_yo_dt_b_order_details_o03?ie=UTF8&orderID=113-0346717-3333333',
                 'invoice_link': 'https://www.amazon.com/gp/css/summary/print.html/ref=ppx_yo_dt_b_invoice_o03?ie=UTF8&orderID=113-0346717-3333333',
-                'order_number': '113-0346717-3333333'},
+                'number': '113-0346717-3333333'},
             {
                 'details_link': 'https://www.amazon.com/gp/your-account/order-details/ref=ppx_yo_dt_b_order_details_o04?ie=UTF8&orderID=112-7543942-4444444',
                 'invoice_link': 'https://www.amazon.com/gp/css/summary/print.html/ref=ppx_yo_dt_b_invoice_o04?ie=UTF8&orderID=112-7543942-4444444',
-                'order_number': '112-7543942-4444444'},
+                'number': '112-7543942-4444444'},
             {
                 'details_link': 'https://www.amazon.com/gp/your-account/order-details/ref=ppx_yo_dt_b_order_details_o05?ie=UTF8&orderID=112-6778897-5555555',
                 'invoice_link': 'https://www.amazon.com/gp/css/summary/print.html/ref=ppx_yo_dt_b_invoice_o05?ie=UTF8&orderID=112-6778897-5555555',
-                'order_number': '112-6778897-5555555'},
+                'number': '112-6778897-5555555'},
             {
                 'details_link': 'https://www.amazon.com/gp/your-account/order-details/ref=ppx_yo_dt_b_order_details_o06?ie=UTF8&orderID=112-1960387-6666666',
                 'invoice_link': 'https://www.amazon.com/gp/css/summary/print.html/ref=ppx_yo_dt_b_invoice_o06?ie=UTF8&orderID=112-1960387-6666666',
-                'order_number': '112-1960387-6666666'},
+                'number': '112-1960387-6666666'},
             {
                 'details_link': 'https://www.amazon.com/gp/your-account/order-details/ref=ppx_yo_dt_b_order_details_o07?ie=UTF8&orderID=112-9888447-7777777',
                 'invoice_link': 'https://www.amazon.com/gp/css/summary/print.html/ref=ppx_yo_dt_b_invoice_o07?ie=UTF8&orderID=112-9888447-7777777',
-                'order_number': '112-9888447-7777777'},
+                'number': '112-9888447-7777777'},
             {
                 'details_link': 'https://www.amazon.com/gp/your-account/order-details/ref=ppx_yo_dt_b_order_details_o08?ie=UTF8&orderID=112-8952643-8888888',
                 'invoice_link': 'https://www.amazon.com/gp/css/summary/print.html/ref=ppx_yo_dt_b_invoice_o08?ie=UTF8&orderID=112-8952643-8888888',
-                'order_number': '112-8952643-8888888'},
+                'number': '112-8952643-8888888'},
             {
                 'details_link': 'https://www.amazon.com/gp/your-account/order-details/ref=ppx_yo_dt_b_order_details_o09?ie=UTF8&orderID=112-9065471-9999999',
                 'invoice_link': 'https://www.amazon.com/gp/css/summary/print.html/ref=ppx_yo_dt_b_invoice_o09?ie=UTF8&orderID=112-9065471-9999999',
-                'order_number': '112-9065471-9999999'},
+                'number': '112-9065471-9999999'},
             {
                 'details_link': 'https://www.amazon.com/gp/your-account/order-details/ref=ppx_yo_dt_b_order_details_o00?ie=UTF8&orderID=112-3194835-1111111',
                 'invoice_link': 'https://www.amazon.com/gp/css/summary/print.html/ref=ppx_yo_dt_b_invoice_o00?ie=UTF8&orderID=112-3194835-1111111',
-                'order_number': '112-3194835-1111111'}], orders, True)
+                'number': '112-3194835-1111111'}], orders, True)
 
-        assert [args[0][0].order_number for args in mock_populate.call_args_list] == [
+        assert [args[0][0].number for args in mock_populate.call_args_list] == [
             "112-7980230-1111111",
             "114-2192237-1111111",
             "112-8291086-2222222",
@@ -229,87 +229,129 @@ def test_order_history_get_orders_from_history_iterate_through_all_pages(driver)
             {
                 'details_link': 'https://www.amazon.com/gp/your-account/order-details/ref=ppx_yo_dt_b_order_details_o00?ie=UTF8&orderID=112-7980230-1111111',
                 'invoice_link': 'https://www.amazon.com/gp/css/summary/print.html/ref=ppx_yo_dt_b_invoice_o00?ie=UTF8&orderID=112-7980230-1111111',
-                'order_number': '112-7980230-1111111'},
+                'number': '112-7980230-1111111',
+                'ordered_date': datetime(2024, 3, 3),
+                'status': OrderStatus.PROCESSING},
             {
                 'details_link': 'https://www.amazon.com/gp/your-account/order-details/ref=ppx_yo_dt_b_order_details_o01?ie=UTF8&orderID=114-2192237-1111111',
                 'invoice_link': 'https://www.amazon.com/gp/css/summary/print.html/ref=ppx_yo_dt_b_invoice_o01?ie=UTF8&orderID=114-2192237-1111111',
-                'order_number': '114-2192237-1111111'},
+                'number': '114-2192237-1111111',
+                'ordered_date': datetime(2024, 3, 3),
+                'status': OrderStatus.PROCESSING},
             {
                 'details_link': 'https://www.amazon.com/gp/your-account/order-details/ref=ppx_yo_dt_b_order_details_o02?ie=UTF8&orderID=112-8291086-2222222',
                 'invoice_link': 'https://www.amazon.com/gp/css/summary/print.html/ref=ppx_yo_dt_b_invoice_o02?ie=UTF8&orderID=112-8291086-2222222',
-                'order_number': '112-8291086-2222222'},
+                'number': '112-8291086-2222222',
+                'ordered_date': datetime(2024, 3, 2),
+                'status': OrderStatus.PROCESSING},
             {
                 'details_link': 'https://www.amazon.com/gp/your-account/order-details/ref=ppx_yo_dt_b_order_details_o03?ie=UTF8&orderID=112-0162431-3333333',
                 'invoice_link': 'https://www.amazon.com/gp/css/summary/print.html/ref=ppx_yo_dt_b_invoice_o03?ie=UTF8&orderID=112-0162431-3333333',
-                'order_number': '112-0162431-3333333'},
+                'number': '112-0162431-3333333',
+                'ordered_date': datetime(2024, 3, 1),
+                'status': OrderStatus.PROCESSING},
             {
                 'details_link': 'https://www.amazon.com/gp/your-account/order-details/ref=ppx_yo_dt_b_order_details_o04?ie=UTF8&orderID=112-8282011-4444444',
                 'invoice_link': 'https://www.amazon.com/gp/css/summary/print.html/ref=ppx_yo_dt_b_invoice_o04?ie=UTF8&orderID=112-8282011-4444444',
-                'order_number': '112-8282011-4444444'},
+                'number': '112-8282011-4444444',
+                'ordered_date': datetime(2024, 2, 29),
+                'status': OrderStatus.PROCESSING},
             {
                 'details_link': 'https://www.amazon.com/gp/your-account/order-details/ref=ppx_yo_dt_b_order_details_o05?ie=UTF8&orderID=112-7330075-5555555',
                 'invoice_link': 'https://www.amazon.com/gp/css/summary/print.html/ref=ppx_yo_dt_b_invoice_o05?ie=UTF8&orderID=112-7330075-5555555',
-                'order_number': '112-7330075-5555555'},
+                'number': '112-7330075-5555555',
+                'ordered_date': datetime(2024, 2, 28),
+                'status': OrderStatus.PROCESSING},
             {
                 'details_link': 'https://www.amazon.com/gp/your-account/order-details/ref=ppx_yo_dt_b_order_details_o06?ie=UTF8&orderID=112-1902758-1111111',
                 'invoice_link': 'https://www.amazon.com/gp/css/summary/print.html/ref=ppx_yo_dt_b_invoice_o06?ie=UTF8&orderID=112-1902758-1111111',
-                'order_number': '112-1902758-1111111'},
+                'number': '112-1902758-1111111',
+                'ordered_date': datetime(2024, 2, 28),
+                'status': OrderStatus.PROCESSING},
             {
                 'details_link': 'https://www.amazon.com/gp/your-account/order-details/ref=ppx_yo_dt_b_order_details_o07?ie=UTF8&orderID=112-9988160-2222222',
                 'invoice_link': 'https://www.amazon.com/gp/css/summary/print.html/ref=ppx_yo_dt_b_invoice_o07?ie=UTF8&orderID=112-9988160-2222222',
-                'order_number': '112-9988160-2222222'},
+                'number': '112-9988160-2222222',
+                'ordered_date': datetime(2024, 2, 26),
+                'status': OrderStatus.PROCESSING},
             {
                 'details_link': 'https://www.amazon.com/gp/your-account/order-details/ref=ppx_yo_dt_b_order_details_o08?ie=UTF8&orderID=112-5388327-1111111',
                 'invoice_link': 'https://www.amazon.com/gp/css/summary/print.html/ref=ppx_yo_dt_b_invoice_o08?ie=UTF8&orderID=112-5388327-1111111',
-                'order_number': '112-5388327-1111111'},
+                'number': '112-5388327-1111111',
+                'ordered_date': datetime(2024, 2, 26),
+                'status': OrderStatus.PROCESSING},
             {
                 'details_link': 'https://www.amazon.com/gp/your-account/order-details/ref=ppx_yo_dt_b_order_details_o09?ie=UTF8&orderID=112-9722039-1111111',
                 'invoice_link': 'https://www.amazon.com/gp/css/summary/print.html/ref=ppx_yo_dt_b_invoice_o09?ie=UTF8&orderID=112-9722039-1111111',
-                'order_number': '112-9722039-1111111'},
+                'number': '112-9722039-1111111',
+                'ordered_date': datetime(2024, 2, 25),
+                'status': OrderStatus.PROCESSING},
             {
                 'details_link': 'https://www.amazon.com/gp/your-account/order-details/ref=ppx_yo_dt_b_order_details_o00?ie=UTF8&orderID=112-9722039-1111111',
                 'invoice_link': 'https://www.amazon.com/gp/css/summary/print.html/ref=ppx_yo_dt_b_invoice_o00?ie=UTF8&orderID=112-9722039-1111111',
-                'order_number': '112-9722039-1111111'},
+                'number': '112-9722039-1111111',
+                'ordered_date': datetime(2024, 2, 25),
+                'status': OrderStatus.PROCESSING},
             {
                 'details_link': 'https://www.amazon.com/gp/your-account/order-details/ref=ppx_yo_dt_b_order_details_o01?ie=UTF8&orderID=112-4659380-1111111',
                 'invoice_link': 'https://www.amazon.com/gp/css/summary/print.html/ref=ppx_yo_dt_b_invoice_o01?ie=UTF8&orderID=112-4659380-1111111',
-                'order_number': '112-4659380-1111111'},
+                'number': '112-4659380-1111111',
+                'ordered_date': datetime(2024, 2, 23),
+                'status': OrderStatus.PROCESSING},
             {
                 'details_link': 'https://www.amazon.com/gp/your-account/order-details/ref=ppx_yo_dt_b_order_details_o02?ie=UTF8&orderID=112-0301652-2222222',
                 'invoice_link': 'https://www.amazon.com/gp/css/summary/print.html/ref=ppx_yo_dt_b_invoice_o02?ie=UTF8&orderID=112-0301652-2222222',
-                'order_number': '112-0301652-2222222'},
+                'number': '112-0301652-2222222',
+                'ordered_date': datetime(2024, 2, 22),
+                'status': OrderStatus.PROCESSING},
             {
                 'details_link': 'https://www.amazon.com/gp/your-account/order-details/ref=ppx_yo_dt_b_order_details_o03?ie=UTF8&orderID=113-0346717-3333333',
                 'invoice_link': 'https://www.amazon.com/gp/css/summary/print.html/ref=ppx_yo_dt_b_invoice_o03?ie=UTF8&orderID=113-0346717-3333333',
-                'order_number': '113-0346717-3333333'},
+                'number': '113-0346717-3333333',
+                'ordered_date': datetime(2024, 2, 21),
+                'status': OrderStatus.PROCESSING},
             {
                 'details_link': 'https://www.amazon.com/gp/your-account/order-details/ref=ppx_yo_dt_b_order_details_o04?ie=UTF8&orderID=112-7543942-4444444',
                 'invoice_link': 'https://www.amazon.com/gp/css/summary/print.html/ref=ppx_yo_dt_b_invoice_o04?ie=UTF8&orderID=112-7543942-4444444',
-                'order_number': '112-7543942-4444444'},
+                'number': '112-7543942-4444444',
+                'ordered_date': datetime(2024, 2, 21),
+                'status': OrderStatus.PROCESSING},
             {
                 'details_link': 'https://www.amazon.com/gp/your-account/order-details/ref=ppx_yo_dt_b_order_details_o05?ie=UTF8&orderID=112-6778897-5555555',
                 'invoice_link': 'https://www.amazon.com/gp/css/summary/print.html/ref=ppx_yo_dt_b_invoice_o05?ie=UTF8&orderID=112-6778897-5555555',
-                'order_number': '112-6778897-5555555'},
+                'number': '112-6778897-5555555',
+                'ordered_date': datetime(2024, 2, 18),
+                'status': OrderStatus.PROCESSING},
             {
                 'details_link': 'https://www.amazon.com/gp/your-account/order-details/ref=ppx_yo_dt_b_order_details_o06?ie=UTF8&orderID=112-1960387-6666666',
                 'invoice_link': 'https://www.amazon.com/gp/css/summary/print.html/ref=ppx_yo_dt_b_invoice_o06?ie=UTF8&orderID=112-1960387-6666666',
-                'order_number': '112-1960387-6666666'},
+                'number': '112-1960387-6666666',
+                'ordered_date': datetime(2024, 2, 18),
+                'status': OrderStatus.PROCESSING},
             {
                 'details_link': 'https://www.amazon.com/gp/your-account/order-details/ref=ppx_yo_dt_b_order_details_o07?ie=UTF8&orderID=112-9888447-7777777',
                 'invoice_link': 'https://www.amazon.com/gp/css/summary/print.html/ref=ppx_yo_dt_b_invoice_o07?ie=UTF8&orderID=112-9888447-7777777',
-                'order_number': '112-9888447-7777777'},
+                'number': '112-9888447-7777777',
+                'ordered_date': datetime(2024, 2, 17),
+                'status': OrderStatus.PROCESSING},
             {
                 'details_link': 'https://www.amazon.com/gp/your-account/order-details/ref=ppx_yo_dt_b_order_details_o08?ie=UTF8&orderID=112-8952643-8888888',
                 'invoice_link': 'https://www.amazon.com/gp/css/summary/print.html/ref=ppx_yo_dt_b_invoice_o08?ie=UTF8&orderID=112-8952643-8888888',
-                'order_number': '112-8952643-8888888'},
+                'number': '112-8952643-8888888',
+                'ordered_date': datetime(2024, 2, 15),
+                'status': OrderStatus.PROCESSING},
             {
                 'details_link': 'https://www.amazon.com/gp/your-account/order-details/ref=ppx_yo_dt_b_order_details_o09?ie=UTF8&orderID=112-9065471-9999999',
                 'invoice_link': 'https://www.amazon.com/gp/css/summary/print.html/ref=ppx_yo_dt_b_invoice_o09?ie=UTF8&orderID=112-9065471-9999999',
-                'order_number': '112-9065471-9999999'},
+                'number': '112-9065471-9999999',
+                'ordered_date': datetime(2024, 2, 13),
+                'status': OrderStatus.PROCESSING},
             {
                 'details_link': 'https://www.amazon.com/gp/your-account/order-details/ref=ppx_yo_dt_b_order_details_o00?ie=UTF8&orderID=112-3194835-1111111',
                 'invoice_link': 'https://www.amazon.com/gp/css/summary/print.html/ref=ppx_yo_dt_b_invoice_o00?ie=UTF8&orderID=112-3194835-1111111',
-                'order_number': '112-3194835-1111111'}], orders, True)
+                'number': '112-3194835-1111111',
+                'ordered_date': datetime(2024, 1, 1),
+                'status': OrderStatus.PROCESSING}], orders, True)
 
 
 def test_order_history_get_current_page_orders(driver):
@@ -318,36 +360,46 @@ def test_order_history_get_current_page_orders(driver):
     orders = OrderHistory(driver).get_current_page_orders()
 
     expected_orders = [Order('112-7980230-1111111',
+                             datetime(2024, 3, 3),
                              'https://www.amazon.com/gp/your-account/order-details/ref=ppx_yo_dt_b_order_details_o00?ie=UTF8&orderID=112-7980230-1111111',
                              'https://www.amazon.com/gp/css/summary/print.html/ref=ppx_yo_dt_b_invoice_o00?ie=UTF8&orderID=112-7980230-1111111'),
                        Order('114-2192237-1111111',
+                             datetime(2024, 3, 3),
                              'https://www.amazon.com/gp/your-account/order-details/ref=ppx_yo_dt_b_order_details_o01?ie=UTF8&orderID=114-2192237-1111111',
                              'https://www.amazon.com/gp/css/summary/print.html/ref=ppx_yo_dt_b_invoice_o01?ie=UTF8&orderID=114-2192237-1111111'),
                        Order('112-8291086-2222222',
+                             datetime(2024, 3, 2),
                              'https://www.amazon.com/gp/your-account/order-details/ref=ppx_yo_dt_b_order_details_o02?ie=UTF8&orderID=112-8291086-2222222',
                              'https://www.amazon.com/gp/css/summary/print.html/ref=ppx_yo_dt_b_invoice_o02?ie=UTF8&orderID=112-8291086-2222222'),
                        Order('112-0162431-3333333',
+                             datetime(2024, 3, 1),
                              'https://www.amazon.com/gp/your-account/order-details/ref=ppx_yo_dt_b_order_details_o03?ie=UTF8&orderID=112-0162431-3333333',
                              'https://www.amazon.com/gp/css/summary/print.html/ref=ppx_yo_dt_b_invoice_o03?ie=UTF8&orderID=112-0162431-3333333'),
                        Order('112-8282011-4444444',
+                             datetime(2024, 2, 29),
                              'https://www.amazon.com/gp/your-account/order-details/ref=ppx_yo_dt_b_order_details_o04?ie=UTF8&orderID=112-8282011-4444444',
                              'https://www.amazon.com/gp/css/summary/print.html/ref=ppx_yo_dt_b_invoice_o04?ie=UTF8&orderID=112-8282011-4444444'),
                        Order('112-7330075-5555555',
+                             datetime(2024, 2, 28),
                              'https://www.amazon.com/gp/your-account/order-details/ref=ppx_yo_dt_b_order_details_o05?ie=UTF8&orderID=112-7330075-5555555',
                              'https://www.amazon.com/gp/css/summary/print.html/ref=ppx_yo_dt_b_invoice_o05?ie=UTF8&orderID=112-7330075-5555555'),
                        Order('112-1902758-1111111',
+                             datetime(2024, 2, 28),
                              'https://www.amazon.com/gp/your-account/order-details/ref=ppx_yo_dt_b_order_details_o06?ie=UTF8&orderID=112-1902758-1111111',
                              'https://www.amazon.com/gp/css/summary/print.html/ref=ppx_yo_dt_b_invoice_o06?ie=UTF8&orderID=112-1902758-1111111'),
                        Order('112-9988160-2222222',
+                             datetime(2024, 2, 26),
                              'https://www.amazon.com/gp/your-account/order-details/ref=ppx_yo_dt_b_order_details_o07?ie=UTF8&orderID=112-9988160-2222222',
                              'https://www.amazon.com/gp/css/summary/print.html/ref=ppx_yo_dt_b_invoice_o07?ie=UTF8&orderID=112-9988160-2222222'),
                        Order('112-5388327-1111111',
+                             datetime(2024, 2, 26),
                              'https://www.amazon.com/gp/your-account/order-details/ref=ppx_yo_dt_b_order_details_o08?ie=UTF8&orderID=112-5388327-1111111',
                              'https://www.amazon.com/gp/css/summary/print.html/ref=ppx_yo_dt_b_invoice_o08?ie=UTF8&orderID=112-5388327-1111111'),
                        Order('112-9722039-1111111',
+                             datetime(2024, 2, 25),
                              'https://www.amazon.com/gp/your-account/order-details/ref=ppx_yo_dt_b_order_details_o09?ie=UTF8&orderID=112-9722039-1111111',
                              'https://www.amazon.com/gp/css/summary/print.html/ref=ppx_yo_dt_b_invoice_o09?ie=UTF8&orderID=112-9722039-1111111')]
-    assert_object_arrays_equal(expected_orders, orders)
+    assert_object_arrays_equal(orders, expected_orders)
 
 
 def test_order_details_populate_address(driver, order):
@@ -457,7 +509,7 @@ def test_extract_payment(driver, order, line, expected):
 
 @pytest.mark.parametrize("link, expected", [
     ['order_details_1_item_not_shipped.html', {
-        'order_number': '1',
+        'number': '1',
         'details_link': 'file:///Users/jacques/dev/amazon-scraping/test_pages/order_details/order_details_1_item_not_shipped.html',
         'invoice_link': None, 'shipping_address': {'street': '1111 MAIN ST',
                                                    'city_state_postal': 'LITTLE WHINGING, SU 12345-3453',
@@ -478,6 +530,8 @@ def test_extract_payment(driver, order, line, expected):
         'subscription_savings': 0.92,
         'courtesy_credit_amount': None,
         'rewards_amount': None,
+        'status': OrderStatus.PROCESSING,
+        'ordered_date': None,
         'shipping_savings': None}],
     ['order_details_3_items_received_1_refunded_2_txs_coupon.html', {
         'coupon_savings': 5.22,
@@ -487,7 +541,7 @@ def test_extract_payment(driver, order, line, expected):
         'invoice_link': None,
         'items_refund_amount': None,
         'items_subtotal_amount': 66.06,
-        'order_number': '1',
+        'number': '1',
         'payment_credit_card': '0002',
         'recipient': 'Harry Potter',
         'shipping_address': {'city_state_postal': 'LITTLE WHINGING, SU 12345-3453',
@@ -502,6 +556,8 @@ def test_extract_payment(driver, order, line, expected):
         'total_refund_amount': 22.59,
         'courtesy_credit_amount': None,
         'rewards_amount': None,
+        'status': OrderStatus.PROCESSING,
+        'ordered_date': None,
         'transactions': [{'amount': 22.59,
                           'cc_last_4': None,
                           'date': datetime(2024, 2, 25, 0, 0)},
@@ -548,18 +604,20 @@ def assert_object_arrays_equal(expected, actual, ignore_none=False):
 
 
 def test_recursive_vars():
-    order = Order("1", "details", "invoice")
+    order = Order("1", None, "details", "invoice")
     order.transactions = [Transaction("1/1/1", 1.0, "0001"),
                           Transaction("1/2/1", 2.0, "0002")]
 
     assert recursive_vars(order) == {'coupon_savings': None,
                                      'details_link': 'details',
+                                     'ordered_date': None,
                                      'gift_card_amount': None,
                                      'grand_total_amount': None,
                                      'invoice_link': 'invoice',
                                      'items_refund_amount': None,
                                      'items_subtotal_amount': None,
-                                     'order_number': '1',
+                                     'number': '1',
+                                     'status': OrderStatus.PROCESSING,
                                      'recipient': None,
                                      'payment_credit_card': None,
                                      'shipping_address': None,
@@ -577,14 +635,15 @@ def test_recursive_vars():
 
 
 def test_recursive_vars_ignore_non():
-    order = Order("1", "details", "invoice")
+    order = Order("1", None, "details", "invoice")
     order.transactions = [Transaction("1/1/1", 1.0, "0001"),
                           Transaction("1/2/1", 2.0, "0002")]
 
     assert recursive_vars(order, True) == {
         'details_link': 'details',
         'invoice_link': 'invoice',
-        'order_number': '1',
+        'number': '1',
+        'status': OrderStatus.PROCESSING,
         'transactions': [{'amount': 1.0, 'cc_last_4': '0001', 'date': '1/1/1'},
                          {'amount': 2.0, 'cc_last_4': '0002', 'date': '1/2/1'}]}
 

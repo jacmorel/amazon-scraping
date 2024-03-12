@@ -1,5 +1,8 @@
 import inspect
 import json
+from datetime import datetime
+from enum import Enum
+from json import JSONEncoder
 
 
 def recursive_vars(obj, ignore_none=False):
@@ -7,6 +10,8 @@ def recursive_vars(obj, ignore_none=False):
         if isinstance(obj, list):
             return [recursive_vars(e, ignore_none) for e in obj]
         # TODO does not handle dict yet
+        elif isinstance(obj, Enum):
+            return obj
         else:
             items = {k: recursive_vars(v, ignore_none) for k, v in vars(obj).items()}
             return {k: v for k, v in items.items() if v is not None} if ignore_none else items
@@ -15,7 +20,24 @@ def recursive_vars(obj, ignore_none=False):
 
 
 def to_dict(obj):
-    return obj.__dict__ if hasattr(obj, '__dict__') else str(obj)
+    if isinstance(obj, Enum):
+        return obj.name
+    elif hasattr(obj, '__dict__'):
+        return obj.__dict__
+    else:
+        return str(obj)
+
+
+class EnumEncoder(JSONEncoder):
+    def default(self, obj):
+        if hasattr(obj, '__dict__'):
+            return obj.__dict__
+        elif isinstance(obj, Enum):
+            return obj.name
+        elif isinstance(obj, datetime):
+            return str(obj)
+        else:
+            return JSONEncoder.default(self, obj)
 
 
 def to_json(obj):

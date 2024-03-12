@@ -1,8 +1,18 @@
 import datetime
+from enum import Enum
 
 from utils.objects import recursive_vars, to_json, get_caller, get_caller_class_name
 
 TIME = datetime.datetime(2024, 5, 4, 3, 2, 1)
+
+
+class TestEnum(Enum):
+    A = "A"
+    B = "C"
+    C = "C"
+
+    def __str__(self):
+        return str(self.name)
 
 
 # noinspection PyMethodMayBeStatic
@@ -11,6 +21,7 @@ class TestClass:
 
     def __init__(self):
         self.time = TIME
+        self.enum = TestEnum.A
 
     def caller_of_get_caller(self):
         return get_caller()
@@ -20,11 +31,11 @@ class TestClass:
 
 
 def test_recursive_vars():
-    assert recursive_vars(TestClass()) == {'time': TIME}
+    assert recursive_vars(TestClass()) == {'time': TIME, 'enum': TestEnum.A}
 
 
 def test_to_json():
-    assert to_json(TestClass()) == '{"time": "2024-05-04 03:02:01"}'
+    assert to_json(TestClass()) == '{"time": "2024-05-04 03:02:01", "enum": "A"}'
 
 
 def test_get_caller():

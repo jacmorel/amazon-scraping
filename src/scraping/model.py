@@ -1,3 +1,6 @@
+from enum import Enum
+
+
 class Address:
     def __init__(self, street, city_state_postal, country):
         self.street = street
@@ -15,9 +18,18 @@ class Transaction:
         return f"Transaction(date={self.date!r}, amount={self.amount!r}, cc_last_4={self.cc_last_4!r})"
 
 
+class OrderStatus(Enum):
+    PROCESSING = "PROCESSING"
+    SHIPPED = "SHIPPED"
+    DELIVERED = "DELIVERED"
+    CANCELLED = "CANCELLED"
+
+
 class Order:
-    def __init__(self, order_number, details_link, invoice_link):
-        self.order_number = order_number
+    def __init__(self, order_number, ordered_date, details_link, invoice_link, status=OrderStatus.PROCESSING):
+        self.number = order_number
+        self.ordered_date = ordered_date
+        self.status = status
         self.details_link = details_link
         self.invoice_link = invoice_link
         self.recipient = None
@@ -40,4 +52,4 @@ class Order:
         self.courtesy_credit_amount = None
 
     def __repr__(self):
-        return f"Order(number={self.order_number!r}, details={self.details_link!r}, invoice={self.invoice_link!r})"
+        return f"Order(number={self.number!r}, details={self.details_link!r}, invoice={self.invoice_link!r})"

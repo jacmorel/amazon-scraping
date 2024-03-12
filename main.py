@@ -1,13 +1,13 @@
 from scraping.scrapers import OrderHistory
 from scraping.utils import run_with_driver
 
-from_year = 2024
+from_year = 2023
 to_year = 2024
 years = list(map(str, range(from_year, to_year + 1)))
 
 
 def run(driver):
-    return OrderHistory(driver).get_orders(years)
+    return OrderHistory(driver).get_all_orders(years)
 
 
 def get_output_file_name(from_year, to_year):
