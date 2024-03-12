@@ -390,9 +390,8 @@ class OrderDetail(Scraper):
                     title = title_div_children[0].text.strip()
                 if len(title) == 0:
                     continue
-                value = (self.find_element_by_xpath('(./div/span)[2]', amount_div).
-                         text.strip().replace("$", ""))
-                self.increment_field_value(self.AMOUNT_MAPPINGS[title], float(value))
+                value = self.find_element_by_xpath('(./div/span)[2]', amount_div).text
+                self.increment_field_value(self.AMOUNT_MAPPINGS[title], self.to_float(value))
             except Exception as e:
                 log.error("Problem on order '%s' getting amount '%s' of '%s': %s(%s)",
                           self.order.number, title, value, type(e).__name__, str(e))
@@ -444,7 +443,7 @@ class OrderDetail(Scraper):
             log.error("Could not parse Refund for order %s: '%s'", self.order.number, line)
             return Transaction(None, 0, "Unparseable refund: " + line)
         date_obj = datetime.strptime(date_match.group(1), '%B %d, %Y')
-        amount_float = float(amount_match.group(1))
+        amount_float = self.to_float(amount_match.group(1))
         return Transaction(date_obj, amount_float, None)
 
     def extract_payment(self, line):
@@ -455,9 +454,13 @@ class OrderDetail(Scraper):
             log.error("Could not parse Payment for order %s: '%s'", self.order.number, line)
             return Transaction(None, 0, "Unparseable payment: " + line)
         date_obj = datetime.strptime(date_match.group(1), '%B %d, %Y')
-        amount_float = float(amount_match.group(1))
+        amount_float = self.to_float(amount_match.group(1))
         cc_last_4 = cc_last_4_match.group(1)
         return Transaction(date_obj, -amount_float, cc_last_4)
+
+    @staticmethod
+    def to_float(float_string):
+        return float(float_string.replace(",", "").replace("$", "").strip())
 
     @staticmethod
     def match_date(s: str):
@@ -465,7 +468,7 @@ class OrderDetail(Scraper):
 
     @staticmethod
     def match_amount(s: str):
-        return re.search(r'\$(\d+\.\d{2})', s)
+        return re.search(r'\$([0-9,]+\.\d{2})', s)
 
     @staticmethod
     def match_credit_card(s: str):

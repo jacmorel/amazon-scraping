@@ -82,7 +82,7 @@ def test_page_iterator(driver, current, next):
         it.__iter__()
         it.__next__()
 
-        mock_get.assert_called_once_with(next)
+        mock_get.assert_called_once_with(next, None)
 
 
 def test_page_iterator_on_last_page(driver):
@@ -442,7 +442,7 @@ def test_order_details_populate_summary(driver, order):
 
     get_order_detail(driver, order).populate_payment_summary(body)
 
-    assert_float_equals(order.items_subtotal_amount, 230.00)
+    assert_float_equals(order.items_subtotal_amount, 2430.00)
     assert_float_equals(order.shipping_amount, 2.00)
     assert_float_equals(order.tax_amount, 18.98)
     assert_float_equals(order.gift_card_amount, 249.98)
@@ -475,7 +475,7 @@ def test_order_details_populate_transactions(driver, order):
     get_order_detail(driver, order).populate_transactions(body)
 
     assert_object_arrays_equal([
-        Transaction(datetime(2024, 2, 25, 0, 0), 22.59, None),
+        Transaction(datetime(2024, 2, 25, 0, 0), 2245.59, None),
         Transaction(datetime(2024, 2, 14, 0, 0), -55.04, '0002'),
         Transaction(datetime(2024, 2, 14, 0, 0), -10.81, '0002'),
     ], order.transactions)
@@ -496,8 +496,8 @@ def test_extract_refund(driver, order, line, expected):
 @pytest.mark.parametrize("line, expected", [
     ["Items shipped: February 14, 2024 - Visa ending in 0002: $55.04",
      "Transaction(date=datetime.datetime(2024, 2, 14, 0, 0), amount=-55.04, cc_last_4='0002')"],
-    ["February 14, 2024 - Visa ending in 0001: $5.05",
-     "Transaction(date=datetime.datetime(2024, 2, 14, 0, 0), amount=-5.05, cc_last_4='0001')"],
+    ["February 14, 2024 - Visa ending in 0001: $1,235.05",
+     "Transaction(date=datetime.datetime(2024, 2, 14, 0, 0), amount=-1235.05, cc_last_4='0001')"],
     ["February 14, 2024 - Visa ending in : $55.04",
      "Transaction(date=None, amount=0, cc_last_4='Unparseable payment: February 14, 2024 - Visa ending in : $55.04')"]
 ])
