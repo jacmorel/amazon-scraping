@@ -1,68 +1,61 @@
 import itertools
-import logging as log
+import logging
 import re
 from datetime import datetime
 
-from selenium.webdriver.chromium.webdriver import ChromiumDriver
+from selenium import webdriver
+from selenium.common import NoSuchElementException
 from selenium.webdriver.common.by import By
 from selenium.webdriver.remote.webelement import WebElement
 from selenium.webdriver.support.select import Select
+from selenium.webdriver.support.wait import WebDriverWait
 
+from scraping.model import Address, Transaction, Order
 from utils.objects import recursive_vars
+from utils.perf import Timing
 
 ITEMS_SHIPPED = "Items shipped:"
 ITEMS_SHIPPED_LEN = len(ITEMS_SHIPPED)
 
-
-class Order:
-    def __init__(self, order_number, details_link, invoice_link):
-        self.order_number = order_number
-        self.details_link = details_link
-        self.invoice_link = invoice_link
-        self.shipping_address = None
-        self.payment_credit_card = None
-        self.items_subtotal_amount = None
-        self.shipping_amount = None
-        self.total_before_tax_amount = None
-        self.tax_amount = None
-        self.grand_total_amount = None
-        self.gift_card_amount = None
-        self.items_refund_amount = None
-        self.tax_refund_amount = None
-        self.total_refund_amount = None
-        self.transactions = None
-        self.coupon_savings = None
-        self.subscription_savings = None
-        self.shipping_savings = None
-
-    def __repr__(self):
-        return f"Order(number={self.order_number!r}, details={self.details_link!r}, invoice={self.invoice_link!r})"
-
-
-class Transaction:
-    def __init__(self, date, amount, cc_last_4):
-        self.date = date
-        self.amount = amount
-        self.cc_last_4 = cc_last_4
-
-    def __repr__(self):
-        return f"Transaction(date={self.date!r}, amount={self.amount!r}, cc_last_4={self.cc_last_4!r})"
-
-
-class Address:
-    def __init__(self, full_name, street, city_state_postal, country):
-        self.full_name = full_name
-        self.street = street
-        self.city_state_postal = city_state_postal
-        self.country = country
+log = logging.getLogger("scraping")
 
 
 class Scraper:
     def __init__(self, driver_or_scraper):
         self.driver = driver_or_scraper.driver if isinstance(driver_or_scraper, Scraper) else driver_or_scraper
 
+    def find_element_safely(self, by: By, value: str, parent: WebElement = None) -> WebElement:
+        try:
+            return self.driver_if_null(parent).find_element(by, value)
+        except NoSuchElementException:
+            return None
+
     def find_element_by_id(self, value: str, parent: WebElement = None) -> WebElement:
         return self.driver_if_null(parent).find_element(by=By.ID, value=value)
+
+    def find_element_by_id_safely(self, value: str, parent: WebElement = None) -> WebElement:
+        try:
+            return self.find_element_by_id(value, parent)
+        except NoSuchElementException:
+            return None
+
+    def find_element_by_name(self, value: str, parent: WebElement = None) -> WebElement:
+        return self.driver_if_null(parent).find_element(by=By.NAME, value=value)
+
+    def find_element_by_name_safely(self, value: str, parent: WebElement = None) -> WebElement:
+        try:
+            return self.find_element_by_name(value, parent)
+        except NoSuchElementException:
+            return None
+
+    def find_element_by_tag(self, value: str, parent: WebElement = None) -> WebElement:
+        return self.driver_if_null(parent).find_element(by=By.TAG_NAME, value=value)
+
+    def find_element_by_tag_safely(self, value: str, parent: WebElement = None) -> WebElement:
+        try:
+            return self.find_element_by_tag(value, parent)
+        except NoSuchElementException:
+            return None
 
     def find_element_by_class(self, value: str, parent: WebElement = None) -> WebElement:
         return self.driver_if_null(parent).find_element(by=By.CLASS_NAME, value=value)
@@ -82,12 +75,46 @@ class Scraper:
     def driver_if_null(self, parent):
         return parent if parent else self.driver
 
+    # noinspection PyMethodMayBeStatic
     def wait_for_input(self):
         input("Press Enter to continue: ")
 
     def get_page(self, url):
         log.info("Loading page %s", url)
-        self.driver.get(url)
+        with Timing(f"Loading page {url}", True):
+            self.driver.get(url)
+            self.wait_for_page_load()
+
+    def wait_for_page_load(self):
+        WebDriverWait(self.driver, 10).until(lambda x: x.find_element(By.TAG_NAME, "body"))
+
+
+class ScrapingContext(Scraper):
+    def __init__(self, by, value, driver_or_scraper):
+        super().__init__(driver_or_scraper)
+        self.value = value
+        self.by = by
+        self.parent = None
+
+    def __enter__(self):
+        try:
+            parent = self.driver.find_element(by=self.by, value=self.value)
+        except NoSuchElementException:
+            parent = None
+
+        self.driver = parent
+
+    def __exit__(self):
+        try:
+            parent = self.driver.find_element(by=self.by, value=self.value)
+        except NoSuchElementException:
+            parent = None
+
+        self.driver = parent
+
+
+CAPTCHA1 = [By.ID, "captchacharacters"]
+CAPTCHA2 = [By.NAME, "cvf_captcha_input"]
 
 
 class Login(Scraper):
@@ -95,12 +122,13 @@ class Login(Scraper):
         super().__init__(driver_or_scraper)
         self.email = email
         self.password = password
+        self.test_captcha = False
 
     def login(self):
         homePage = 'https://www.amazon.com'
-        self.driver.get(homePage)
-        self.driver.implicitly_wait(10)
-        self.handle_captcha()
+        self.get_page(homePage)
+
+        self.handle_captcha(*CAPTCHA1)
 
         signinLink = self.find_element_by_id("nav-link-accountList")
         loginPage = signinLink.get_property("href")
@@ -116,8 +144,28 @@ class Login(Scraper):
         passwordField.send_keys(self.password)
         continueBtn.click()
 
-    def handle_captcha(self):
+        self.handle_captcha(*CAPTCHA2)
+
+    def handle_captcha(self, by, input_name):
+        captcha_input = self.find_element_safely(by, input_name)
+        if captcha_input is None:
+            return
+        image = self.driver.find_element(By.TAG_NAME, "img").get_attribute("src")
+        image_driver = self.create_driver()
+
+        try:
+            image_driver.get(image)
+            response = input("Please enter image characters: ")
+            captcha_input.send_keys(response)
+            captcha_input.submit()
+        finally:
+            image_driver.quit()
+
         self.wait_for_input()
+
+    @staticmethod
+    def create_driver():
+        return webdriver.Chrome()
 
 
 class OrderHistory(Scraper):
@@ -132,7 +180,10 @@ class OrderHistory(Scraper):
 
     def get_all_orders(self):
         orders = self.get_all_orders_from_history()
-        for o in orders:
+        order_count = len(orders)
+        log.info("Populating %d orders" % order_count)
+        for i, o in enumerate(orders):
+            log.info("Populating order #%d/%d: %s", i, order_count, o.order_number)
             self.order_detail_scraper.populate(o)
         return orders
 
@@ -163,9 +214,6 @@ class OrderHistory(Scraper):
 
     def get_order_number(self, order_card):
         element = self.find_element_by_css(".yohtmlc-order-id .a-color-secondary.value bdi", order_card)
-        # value="//span[contains(., 'Order #')]/following-sibling::span/bdi")
-        # value='//span[@class="a-color-secondary" and preceding-sibling::span[.="Order #"]]')
-        # value='//span[preceding-sibling::span[.="Order #"]]')
         return element.text
 
     def get_order_details_link(self, order_card):
@@ -193,7 +241,7 @@ class PageIterator(Scraper):
             self.get_page(next_link)
 
     def get_next_page_link(self):
-        arefs = self.find_elements_by_xpath("//a[contains(text(), 'Next')]")
+        arefs = self.find_elements_by_xpath("//ul[@class='a-pagination']//a[starts-with(text(), 'Next')]")
         if len(arefs) == 0:
             return None
         return arefs[0].get_attribute("href")
@@ -202,57 +250,79 @@ class PageIterator(Scraper):
 class OrderDetail(Scraper):
     def __init__(self, driver_or_scraper):
         super().__init__(driver_or_scraper)
+        self.summary_div = None
         self.order = None
 
     def populate(self, order: Order):
         self.order = order
-        log.info("Populating order %s", order.order_number)
         self.go_to_order_details()
-        self.populate_summary()
-        self.populate_transactions()
-        self.populate_address()
-        self.populate_payment()
+        with Timing():
+            self.populate_summary()
         log.info("order = %s", recursive_vars(self.order))
+
+    def populate_summary(self):
+        summary_div = self.find_element_by_css("[data-component='paymentDetails'")
+        self.populate_payment_method(summary_div)
+        self.populate_payment_summary(summary_div)
+        self.populate_transactions(summary_div)
+        self.populate_address(summary_div)
 
     def go_to_order_details(self):
         self.get_page(self.order.details_link)
 
-    def populate_payment(self):
-        div_text = self.find_element_by_css('div.pmts-payments-instrument-details').text
+    def populate_payment_method(self, summary_div):
+        payment_blocks = self.find_elements_by_xpath(".//*[contains(text(), 'Payment ')]", summary_div)
+        if len(payment_blocks) == 0:
+            log.error("Order #%s: Could not find any payment method", self.order.order_number)
+            return
+
+        payment_method_title_element = payment_blocks[0]
+        if payment_method_title_element.text.strip().lower() != "payment method":
+            log.error("Order #%s: Could not find any payment method", self.order.order_number)
+            return
+
+        parent = self.find_element_by_xpath("../..", payment_method_title_element)
+
+        div_text = parent.text
 
         match = re.search(r"ending in (\d+)", div_text)
-
-        payment_cc = None
         if match:
             payment_cc = match.group(1)
+        elif "Gift Card" in div_text:
+            payment_cc = "Gift"
+        else:
+            payment_cc = None
+
         self.order.payment_credit_card = payment_cc
 
-    def populate_address(self):
-        full_name = self.find_element_by_css(".displayAddressFullName").text
-        street = self.find_element_by_css(".displayAddressAddressLine1").text
-        city_state_postal = self.find_element_by_css(".displayAddressCityStateOrRegionPostalCode").text
-        country = self.find_element_by_css(".displayAddressCountryName").text
+    def populate_address(self, summary_div):
+        full_name = self.find_element_by_css(".displayAddressFullName", summary_div).text
+        street = self.find_element_by_css(".displayAddressAddressLine1", summary_div).text
+        city_state_postal = self.find_element_by_css(".displayAddressCityStateOrRegionPostalCode", summary_div).text
+        country = self.find_element_by_css(".displayAddressCountryName", summary_div).text
         self.order.shipping_address = Address(full_name, street, city_state_postal, country)
 
     AMOUNT_MAPPINGS = {
         # Title                              Field                      Negate?
-        "Item(s) Subtotal:":                ["items_subtotal_amount",   False],
-        "Shipping & Handling:":             ["shipping_amount",         False],
-        "Total before tax:":                ["total_before_tax_amount", False],
-        "Estimated tax to be collected:":   ["tax_amount",              False],
-        "Gift Card Amount:":                ["gift_card_amount",        True],
-        "Grand Total:":                     ["grand_total_amount",      False],
-        "Item(s) refund:":                  ["items_refund_amount",     False],
-        "Tax refund:":                      ["tax_refund_amount",       False],
-        "Refund Total:":                    ["total_refund_amount",     False],
-        "Refund Total":                     ["total_refund_amount",     False],
-        "Your Coupon Savings:":             ["coupon_savings",          True],
-        "Subscribe & Save:":                ["subscription_savings",    True],
-        "Free Shipping:":                   ["shipping_savings",        True],
+        "Item(s) Subtotal:": ["items_subtotal_amount", False],
+        "Shipping & Handling:": ["shipping_amount", False],
+        "Total before tax:": ["total_before_tax_amount", False],
+        "Estimated tax to be collected:": ["tax_amount", False],
+        "Gift Card Amount:": ["gift_card_amount", True],
+        "Grand Total:": ["grand_total_amount", False],
+        "Item(s) refund:": ["items_refund_amount", False],
+        "Tax refund:": ["tax_refund_amount", False],
+        "Refund Total:": ["total_refund_amount", False],
+        "Refund Total": ["total_refund_amount", False],
+        "Your Coupon Savings:": ["coupon_savings", True],
+        "Subscribe & Save:": ["subscription_savings", True],
+        "Free Shipping:": ["shipping_savings", True],
+        "Rewards Points:": ["rewards_amount", True],
+        "Courtesy Credit:": ["courtesy_credit_amount", True]
     }
 
-    def populate_summary(self):
-        amounts_divs = self.find_elements_by_xpath('//div[@id="od-subtotals"]//div[@class="a-row"]')
+    def populate_payment_summary(self, summary_div):
+        amounts_divs = self.find_elements_by_xpath('.//div[@id="od-subtotals"]//div[@class="a-row"]', summary_div)
         for amount_div in amounts_divs:
             try:
                 log.debug("Processing amount div: %s", amount_div.get_attribute("outerHTML"))
@@ -262,6 +332,8 @@ class OrderDetail(Scraper):
                     title = title_div.text.strip()
                 else:
                     title = title_div_children[0].text.strip()
+                if len(title) == 0:
+                    continue
                 value = (self.find_element_by_xpath('(./div/span)[2]', amount_div).
                          text.strip().replace("$", ""))
                 self.increment_field_value(self.AMOUNT_MAPPINGS[title], float(value))
@@ -278,13 +350,19 @@ class OrderDetail(Scraper):
         setattr(self.order, field_name, incremented_value)
         log.debug("Setting field '%s' to '%s'", field_name, getattr(self.order, field_name))
 
-    def populate_transactions(self):
-        transactions_div = self.find_element_by_xpath("//span[contains(text(),'Transactions')]/../../div")
-        transactions_spans = self.find_elements_by_xpath("//div[contains(@class, 'a-expander-content')]//span",
+    def populate_transactions(self, summary_div):
+        transactions_divs = self.find_elements_by_xpath(".//span[contains(text(),'Transactions')]/../../div",
+                                                        summary_div)
+        if len(transactions_divs) == 0:
+            return
+        else:
+            transactions_div = transactions_divs[0]
+        transactions_spans = self.find_elements_by_xpath(".//div[contains(@class,'a-row')]",
                                                          transactions_div)
         lines = [e.get_attribute("outerText").strip().replace("\n", "") for e in transactions_spans]
         transactions = []
         i = 0
+        tx = None
         while i < len(lines):
             line = lines[i]
             if line.startswith("Refund:"):
@@ -294,9 +372,12 @@ class OrderDetail(Scraper):
                     i += 1
                     line = lines[i]
                 else:
-                    line = line.replace(ITEMS_SHIPPED)
+                    line = line.replace(ITEMS_SHIPPED, "")
                 tx = self.extract_payment(line)
-            transactions.append(tx)
+            else:
+                log.error("Order # %s: could not parse transaction '%s'", self.order.order_number, line)
+            if tx is not None:
+                transactions.append(tx)
             i += 1
         self.order.transactions = transactions
 

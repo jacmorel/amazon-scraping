@@ -5,9 +5,11 @@ from datetime import datetime
 from unittest.mock import patch
 
 import pytest
-from selenium import webdriver
+from selenium.webdriver.common.by import By
 
-from scraping.scrapers import OrderHistory, Order, OrderDetail, Transaction, PageIterator
+from scraping.model import Transaction, Order
+from scraping.scrapers import OrderHistory, OrderDetail, PageIterator, Login, CAPTCHA1, CAPTCHA2
+from scraping.utils import create_driver_with_default_options
 from utils.objects import recursive_vars
 
 # log.basicConfig(level=log.DEBUG)
@@ -21,9 +23,8 @@ ORDER_HISTORY_PAGE_7 = "order_history_p7.html"
 
 @pytest.fixture
 def driver():
-    driver = webdriver.Chrome()
+    driver = create_driver_with_default_options()
     yield driver
-    # input("Press Enter to continue")
     driver.quit()
 
 
@@ -32,11 +33,46 @@ def order():
     return Order("1", None, None)
 
 
+@pytest.mark.parametrize("link, captcha, img", [
+    ["login_captcha_characters.html", CAPTCHA1,
+     "test_pages/login/login_captcha_characters_files/Captcha_wrmbbboksl.jpg"],
+    ["login_captcha_puzzle.html", CAPTCHA2,
+     "test_pages/login/login_captcha_puzzle_files/5542c35e655e49f8bc92bebdc86ffcd7.jpg"],
+])
+def test_login_captcha(driver, link, captcha, img):
+    class MockDriver:
+        def __init__(self):
+            self.quit_called = False
+
+        def get(self, page):
+            assert page.endswith(img)
+
+        def quit(self):
+            self.quit_called = True
+
+    load_page(driver, link)
+
+    mock_driver = MockDriver()
+    with patch.object(Login, "create_driver", side_effect=[mock_driver]) as mock_create_driver, \
+            patch(target="builtins.input", return_value='John Doe') as mock_input, \
+            patch(target="selenium.webdriver.remote.webelement.WebElement.send_keys") as mock_send_keys, \
+            patch(target="selenium.webdriver.remote.webelement.WebElement.submit") as mock_submit, \
+            patch(target="scraping.scrapers.Login.wait_for_input"):
+        login = Login(driver, "", "")
+        login.handle_captcha(*captcha)
+
+        mock_create_driver.assert_called_once()
+        mock_input.assert_called_once()
+        mock_send_keys.assert_called_once_with("John Doe")
+        mock_submit.assert_called_once()
+        assert mock_driver.quit_called
+
+
 @pytest.mark.parametrize("current, next", [
     [ORDER_HISTORY_PAGE_1,
-     'https://www.amazon.com/your-orders/orders?timeFilter=year-2024&startIndex=10&ref_=ppx_yo2ov_dt_b_pagination_1_2'],
+     "https://www.amazon.com/your-orders/orders?timeFilter=year-2024&startIndex=10&ref_=ppx_yo2ov_dt_b_pagination_1_2"],
     [ORDER_HISTORY_PAGE_2,
-     'https://www.amazon.com/gp/product/B0BFG45YJ9/ref=ppx_yo_dt_b_asin_title_o07_s03?ie=UTF8&psc=1'],
+     "https://www.amazon.com/your-orders/orders?timeFilter=year-2024&startIndex=20&ref_=ppx_yo2ov_dt_b_pagination_2_3"],
 ])
 def test_page_iterator(driver, current, next):
     load_page(driver, current)
@@ -217,9 +253,8 @@ def test_order_history_get_current_page_orders(driver):
 
 
 def test_order_details_populate_address(driver, order):
-    load_page(driver, ['order_details', 'shipping_address.html'])
-
-    get_order_detail(driver, order).populate_address()
+    body = load_page(driver, ['order_details', 'shipping_address.html'])
+    get_order_detail(driver, order).populate_address(body)
 
     assert vars(order.shipping_address) == {'full_name': 'Hermione Granger',
                                             'street': '1111 MAIN ST',
@@ -234,12 +269,17 @@ def get_order_detail(driver, order):
     return order_detail
 
 
-def test_order_details_populate_payment(driver, order):
-    load_page(driver, ['order_details', 'payment_method.html'])
+@pytest.mark.parametrize("file, expected", [
+    ['payment_method.html', "0001"],
+    ['payment_method_gift_card.html', "Gift"],
+    ['payment_method_with_gift_card_prompt.html', "9921"],
+])
+def test_order_details_populate_payment(driver, order, file, expected):
+    body = load_page(driver, ['order_details', file])
 
-    get_order_detail(driver, order).populate_payment()
+    get_order_detail(driver, order).populate_payment_method(body)
 
-    assert order.payment_credit_card == "0001"
+    assert order.payment_credit_card == expected
 
 
 def assert_float_equals(actual, expected):
@@ -247,9 +287,9 @@ def assert_float_equals(actual, expected):
 
 
 def test_order_details_populate_summary(driver, order):
-    load_page(driver, ['order_details', 'order_summary.html'])
+    body = load_page(driver, ['order_details', 'order_summary.html'])
 
-    get_order_detail(driver, order).populate_summary()
+    get_order_detail(driver, order).populate_payment_summary(body)
 
     assert_float_equals(order.items_subtotal_amount, 230.00)
     assert_float_equals(order.shipping_amount, 2.00)
@@ -262,14 +302,16 @@ def test_order_details_populate_summary(driver, order):
     assert_float_equals(order.coupon_savings, 8.44)  # testing addition of 2 coupons
     assert_float_equals(order.subscription_savings, 0.92)
     assert_float_equals(order.shipping_savings, 2.99)
+    assert_float_equals(order.rewards_amount, 57.03)
+    assert_float_equals(order.courtesy_credit_amount, 10.00)
 
 
 def test_order_details_populate_summary_refund(driver, order):
     set_logging_level(log.INFO)
 
-    load_page(driver, ['order_details', 'order_summary_refund_section.html'])
+    body = load_page(driver, ['order_details', 'order_summary_refund_section.html'])
 
-    get_order_detail(driver, order).populate_summary()
+    get_order_detail(driver, order).populate_payment_summary(body)
 
     assert order.items_refund_amount == 230.00
     assert order.tax_refund_amount == 17.98
@@ -277,9 +319,9 @@ def test_order_details_populate_summary_refund(driver, order):
 
 
 def test_order_details_populate_transactions(driver, order):
-    load_page(driver, ['order_details', 'transactions.html'])
+    body = load_page(driver, ['order_details', 'transactions.html'])
 
-    get_order_detail(driver, order).populate_transactions()
+    get_order_detail(driver, order).populate_transactions(body)
 
     assert_object_arrays_equal([
         Transaction(datetime(2024, 2, 25, 0, 0), 22.59, None),
@@ -314,12 +356,31 @@ def test_extract_payment(driver, order, line, expected):
     assert expected == str(tx)
 
 
-def test_order_details_populate(driver, order):
-    order.details_link = get_test_page_link('order_details_3_items_received_1_refunded_2_txs_coupon.html')
-
-    OrderDetail(driver).populate(order)
-
-    assert recursive_vars(order) == {
+@pytest.mark.parametrize("link, expected", [
+    ['order_details_1_item_not_shipped.html', {
+        'order_number': '1',
+        'details_link': 'file:///Users/jacques/dev/amazon-scraping/test_pages/order_details/order_details_1_item_not_shipped.html',
+        'invoice_link': None, 'shipping_address': {'full_name': 'Hermione Granger',
+                                                   'street': '1111 MAIN ST',
+                                                   'city_state_postal': 'LITTLE WHINGING, SU 12345-3453',
+                                                   'country': 'United Kingdom'},
+        'payment_credit_card': '1001',
+        'items_subtotal_amount': 18.39,
+        'shipping_amount': 0.0,
+        'total_before_tax_amount': 8.27,
+        'tax_amount': 0.0,
+        'grand_total_amount': 8.27,
+        'gift_card_amount': None,
+        'items_refund_amount': None,
+        'tax_refund_amount': None,
+        'total_refund_amount': None,
+        'transactions': None,
+        'coupon_savings': 9.2,
+        'subscription_savings': 0.92,
+        'courtesy_credit_amount': None,
+        'rewards_amount': None,
+        'shipping_savings': None}],
+    ['order_details_3_items_received_1_refunded_2_txs_coupon.html', {
         'coupon_savings': 5.22,
         'details_link': 'file:///Users/jacques/dev/amazon-scraping/test_pages/order_details/order_details_3_items_received_1_refunded_2_txs_coupon.html',
         'gift_card_amount': None,
@@ -340,6 +401,8 @@ def test_order_details_populate(driver, order):
         'tax_refund_amount': None,
         'total_before_tax_amount': 60.84,
         'total_refund_amount': 22.59,
+        'courtesy_credit_amount': None,
+        'rewards_amount': None,
         'transactions': [{'amount': 22.59,
                           'cc_last_4': None,
                           'date': datetime(2024, 2, 25, 0, 0)},
@@ -348,13 +411,21 @@ def test_order_details_populate(driver, order):
                           'date': datetime(2024, 2, 14, 0, 0)},
                          {'amount': -10.81,
                           'cc_last_4': '0002',
-                          'date': datetime(2024, 2, 14, 0, 0)}]
-    }
+                          'date': datetime(2024, 2, 14, 0, 0)}]}
+     ],
+])
+def test_order_details_populate(driver, order, link, expected):
+    order.details_link = get_test_page_link(link)
+
+    OrderDetail(driver).populate(order)
+
+    assert recursive_vars(order) == expected
 
 
 def load_page(driver, relative_path_elements):
     link = get_test_page_link(relative_path_elements)
     driver.get(link)
+    return driver.find_element(By.TAG_NAME, 'body')
 
 
 def get_test_page_link(relative_path_elements):
@@ -366,7 +437,7 @@ def get_test_page_link(relative_path_elements):
 
 
 def prepend_test_directory(file_name: str):
-    pages = ["order_details", "order_history"]
+    pages = ["order_details", "order_history", "login"]
     for page in pages:
         if file_name.startswith(page):
             return [page, file_name]
@@ -399,6 +470,8 @@ def test_recursive_vars():
                                      'tax_refund_amount': None,
                                      'total_before_tax_amount': None,
                                      'total_refund_amount': None,
+                                     'courtesy_credit_amount': None,
+                                     'rewards_amount': None,
                                      'transactions': [{'amount': 1.0, 'cc_last_4': '0001', 'date': '1/1/1'},
                                                       {'amount': 2.0, 'cc_last_4': '0002', 'date': '1/2/1'}]}
 
