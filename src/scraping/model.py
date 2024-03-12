@@ -1,6 +1,5 @@
 class Address:
-    def __init__(self, full_name, street, city_state_postal, country):
-        self.full_name = full_name
+    def __init__(self, street, city_state_postal, country):
         self.street = street
         self.city_state_postal = city_state_postal
         self.country = country
@@ -21,6 +20,7 @@ class Order:
         self.order_number = order_number
         self.details_link = details_link
         self.invoice_link = invoice_link
+        self.recipient = None
         self.shipping_address = None
         self.payment_credit_card = None
         self.items_subtotal_amount = None

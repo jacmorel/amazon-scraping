@@ -173,26 +173,32 @@ class OrderHistory(Scraper):
         super().__init__(driver_or_scraper)
         self.order_detail_scraper = order_detail_scraper if order_detail_scraper is not None else OrderDetail(self)
 
-    def get_orders(self, year="2024"):
+    def get_all_orders(self, years=None, full_orders=True):
+        if years is None:
+            years = ["2024"]
         self.get_page("https://www.amazon.com/gp/your-account/order-history")
-        self.filter_orders(year)
-        return self.get_all_orders()
+        orders = []
+        for year in years:
+            self.filter_orders(year)
+            orders.append(self.get_orders_from_history())
+        if full_orders:
+            self.get_orders_details(orders)
+        return orders
 
-    def get_all_orders(self):
-        orders = self.get_all_orders_from_history()
+    def get_orders_from_history(self):
+        orders = [self.get_current_page_orders()]
+        iterator = PageIterator(self)
+        for page in iterator:
+            orders.append(self.get_current_page_orders())
+        return list(itertools.chain(*orders))
+
+    def get_orders_details(self, orders):
         order_count = len(orders)
         log.info("Populating %d orders" % order_count)
         for i, o in enumerate(orders):
             log.info("Populating order #%d/%d: %s", i, order_count, o.order_number)
             self.order_detail_scraper.populate(o)
         return orders
-
-    def get_all_orders_from_history(self):
-        orders = [self.get_current_page_orders()]
-        iterator = PageIterator(self)
-        for page in iterator:
-            orders.append(self.get_current_page_orders())
-        return list(itertools.chain(*orders))
 
     def filter_orders(self, time_filter):
         orderFilter = Select(self.find_element_by_id("time-filter"))
@@ -298,11 +304,11 @@ class OrderDetail(Scraper):
         self.order.payment_credit_card = payment_cc
 
     def populate_address(self, summary_div):
-        full_name = self.find_element_by_css(".displayAddressFullName", summary_div).text
+        self.order.recipient = self.find_element_by_css(".displayAddressFullName", summary_div).text
         street = self.find_element_by_css(".displayAddressAddressLine1", summary_div).text
         city_state_postal = self.find_element_by_css(".displayAddressCityStateOrRegionPostalCode", summary_div).text
         country = self.find_element_by_css(".displayAddressCountryName", summary_div).text
-        self.order.shipping_address = Address(full_name, street, city_state_postal, country)
+        self.order.shipping_address = Address(street, city_state_postal, country)
 
     AMOUNT_MAPPINGS = {
         # Title                              Field                      Negate?
