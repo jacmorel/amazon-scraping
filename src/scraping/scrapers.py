@@ -289,9 +289,11 @@ class OrderDetail(Scraper):
         if match:
             payment_cc = match.group(1)
         elif "Gift Card" in div_text:
-            payment_cc = "Gift"
+            payment_cc = "Gift Card"
+        elif "Amazon gift card balance" in div_text:
+            payment_cc = "Gift Card Balance"
         else:
-            payment_cc = None
+            payment_cc = div_text
 
         self.order.payment_credit_card = payment_cc
 

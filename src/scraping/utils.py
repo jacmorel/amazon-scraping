@@ -1,4 +1,7 @@
+import csv
+import json
 import logging as log
+from datetime import datetime
 
 from selenium import webdriver
 
@@ -7,7 +10,7 @@ from scraping.scrapers import Login
 from utils.objects import to_json
 
 
-def run_with_driver(to_execute):
+def run_with_driver(to_execute, name):
     log.basicConfig(level=log.INFO)
 
     # driver = create_driver()
@@ -17,10 +20,36 @@ def run_with_driver(to_execute):
 
     results = to_execute(driver)
 
-    print(to_json(results))
+    write_output_files(name, results)
 
     input("Processing complete. Press Enter to quit...")
     driver.quit()
+
+
+def write_output_files(name, results):
+    json_data = to_json(results)
+    write_json_output_file(json_data, name)
+    write_csv_output_file(json_data, name)
+
+
+def write_json_output_file(json_data, name):
+    file_name = get_output_file(name, "json")
+    print(f"Saving output to {file_name}")
+    with open(file_name, 'w') as file:
+        json.dump(json_data, file, ensure_ascii=False, indent=4)
+
+
+def write_csv_output_file(json_data, name):
+    file_name = get_output_file(name, "csv")
+    print(f"Saving output to {file_name}")
+    with open(file_name, 'w') as file:
+        csv_writer = csv.DictWriter(file, fieldnames=json_data[0].keys())
+        csv_writer.writeheader()
+        csv_writer.writerows(json_data)
+
+
+def get_output_file(name, ext):
+    return f"output/{name}-{datetime.now().strftime('%Y-%m-%d_%H-%M')}.{ext}"
 
 
 def create_driver_with_default_options():

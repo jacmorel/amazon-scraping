@@ -271,8 +271,9 @@ def get_order_detail(driver, order):
 
 @pytest.mark.parametrize("file, expected", [
     ['payment_method.html', "0001"],
-    ['payment_method_gift_card.html', "Gift"],
+    ['payment_method_gift_card.html', "Gift Card"],
     ['payment_method_with_gift_card_prompt.html', "9921"],
+    ['payment_method_gift_card_balance.html', "Gift Card Balance"],
 ])
 def test_order_details_populate_payment(driver, order, file, expected):
     body = load_page(driver, ['order_details', file])
