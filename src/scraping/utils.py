@@ -10,8 +10,12 @@ from scraping.scrapers import Login
 from utils.objects import to_json
 
 
-def run_with_driver(to_execute, name):
+def run_with_driver(to_execute, base_name, message):
     log.basicConfig(level=log.INFO)
+
+    base_name = get_output_file(base_name)
+
+    print(f"Scraping {message} to {base_name}.[json|csv]")
 
     # driver = create_driver()
     driver = create_driver_with_default_options()
@@ -20,27 +24,27 @@ def run_with_driver(to_execute, name):
 
     results = to_execute(driver)
 
-    write_output_files(name, results)
+    write_output_files(base_name, results)
 
     input("Processing complete. Press Enter to quit...")
     driver.quit()
 
 
-def write_output_files(name, results):
+def write_output_files(base_name, results):
     json_data = to_json(results)
-    write_json_output_file(json_data, name)
-    write_csv_output_file(json_data, name)
+    write_json_output_file(json_data, base_name)
+    write_csv_output_file(json_data, base_name)
 
 
-def write_json_output_file(json_data, name):
-    file_name = get_output_file(name, "json")
+def write_json_output_file(json_data, base_name):
+    file_name = base_name + ".json"
     print(f"Saving output to {file_name}")
     with open(file_name, 'w') as file:
         json.dump(json_data, file, ensure_ascii=False, indent=4)
 
 
-def write_csv_output_file(json_data, name):
-    file_name = get_output_file(name, "csv")
+def write_csv_output_file(json_data, base_name):
+    file_name = base_name + ".csv"
     print(f"Saving output to {file_name}")
     with open(file_name, 'w') as file:
         csv_writer = csv.DictWriter(file, fieldnames=json_data[0].keys())
@@ -48,8 +52,8 @@ def write_csv_output_file(json_data, name):
         csv_writer.writerows(json_data)
 
 
-def get_output_file(name, ext):
-    return f"output/{name}-{datetime.now().strftime('%Y-%m-%d_%H-%M')}.{ext}"
+def get_output_file(base_name):
+    return f"output/{base_name}__{datetime.now().strftime('%Y-%m-%d_%H-%M')}"
 
 
 def create_driver_with_default_options():
@@ -70,5 +74,3 @@ def create_driver(options=None):
 def login(driver):
     email, password = get_item_fields("ServiceAccount", "Amazon", ["username", "password"])
     Login(driver, email, password).login()
-
-
