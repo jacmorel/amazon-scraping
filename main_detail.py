@@ -1,15 +1,32 @@
+import re
+import sys
+from datetime import datetime
+
 from scraping.model import Order
 from scraping.scrapers import OrderDetail
 from scraping.utils import run_with_driver
 
+page = ""
+
 
 def run(driver):
-    # page = "https://www.amazon.com/gp/your-account/order-details/ref=ppx_yo_dt_b_order_details_o00?ie=UTF8&orderID=114-6770746-5681035"
-    page = "https://www.amazon.com/gp/your-account/order-details/ref=ppx_yo_dt_b_order_details_o00?ie=UTF8&orderID=112-3242278-6505054"
-    o = Order("`", page, "")
+    o = Order(order_number, datetime.now(), page, "")
     OrderDetail(driver).populate(o)
     return o
 
 
+def parse_args(argv):
+    global page
+    if (len(argv) == 2 and argv[1] == "--help") or (len(argv) == 1):
+        print("Usage: python main_details.py <order details url>")
+        exit()
+    elif len(argv) == 2:
+        page = argv[1]
+
+
 if __name__ == '__main__':
-    run_with_driver(run)
+    parse_args(sys.argv)
+
+    order_number = re.search(r'orderID=(.*?)$', page).group(1)
+
+    run_with_driver(run, f"order-{order_number}", f"order {order_number} details")
