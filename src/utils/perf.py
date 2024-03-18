@@ -22,7 +22,7 @@ class Timing:
 
     def __enter__(self):
         if self.log_start:
-            print(f"###TIME### {self.name} START")
+            print(f"###TIME### START {self.name} ")
         self.start()
         return self
 
@@ -31,4 +31,4 @@ class Timing:
         print(self.get_results())
 
     def get_results(self):
-        return f"###TIME### {self.name}{" END" if self.log_start else ""}: {self.elapsed_time()} seconds"
+        return f"###TIME### {"END " if self.log_start else ""}{self.name}: {self.elapsed_time()} seconds"

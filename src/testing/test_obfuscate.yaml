@@ -1,5 +1,3 @@
-{
-  strings: { "John Smith": "Harry Potter",
-           "Tom Rye": "Hermione Granger",
-  },
-}
+strings:
+  John Smith: Harry Potter
+  Tom Rye: Hermione Granger

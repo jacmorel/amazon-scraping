@@ -2,3 +2,7 @@
 /src/testing/obfuscate.yaml
 /dist/
 /.amazon-scraping/
+/.idea/workspace.xml
+/**/*.bak
+/**/.obfuscate.yaml
+/.idea/shelf/
