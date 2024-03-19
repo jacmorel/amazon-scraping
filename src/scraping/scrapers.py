@@ -2,7 +2,6 @@ import itertools
 import logging
 import re
 from datetime import datetime
-from time import sleep
 
 from selenium import webdriver
 from selenium.common import NoSuchElementException
@@ -193,17 +192,18 @@ class OrderHistory(Scraper):
     def __init__(self, driver_or_scraper, order_detail_scraper=None):
         super().__init__(driver_or_scraper)
         self.order_detail_scraper = order_detail_scraper if order_detail_scraper is not None else OrderDetail(self)
+        self.order_history_home = "https://www.amazon.com/gp/your-account/order-history"
 
     def get_all_orders(self, years=None, full_orders=True):
         if years is None:
             years = ["2024"]
-        self.get_page("https://www.amazon.com/gp/your-account/order-history")
+        self.get_page(self.order_history_home)
         orders = []
         for year in years:
             self.filter_orders(year)
-            orders.append(self.get_orders_from_history())
+            orders.extend(self.get_orders_from_history())
         if full_orders:
-            self.get_orders_details(list(itertools.chain(*orders)))
+            self.get_orders_details(orders)
         return orders
 
     def get_orders_from_history(self):
@@ -222,10 +222,10 @@ class OrderHistory(Scraper):
         return orders
 
     def filter_orders(self, time_filter):
-        orderFilter = Select(self.find_element_by_id("time-filter"))
-        orderFilter.select_by_visible_text(time_filter)
-        orderFilterForm = self.find_element_by_id("time-filter")
-        orderFilterForm.submit()
+        time_filter_element = self.find_element_by_id("time-filter")
+        time_filter_select = Select(time_filter_element)
+        time_filter_select.select_by_visible_text(time_filter)
+        time_filter_element.submit()
 
     def get_current_page_orders(self):
         elements = self.find_elements_by_class("order-card")
@@ -255,7 +255,7 @@ class OrderHistory(Scraper):
             return None
         date_string = element.text
         try:
-            return datetime.strptime(date_string, "%B %d, %Y")
+            return datetime.strptime(date_string, "%B %d, %Y").date()
         except ValueError as e:
             log.error("Order date could not be parsed: %s", e)
             return date_string
@@ -272,11 +272,10 @@ class OrderHistory(Scraper):
         element = self.find_element_safely(By.LINK_TEXT, 'View invoice', order_card)
         if element is None:
             element = self.find_element_safely(By.LINK_TEXT, 'Invoice', order_card)  # French order
-        elif element is None:
+        if element is None:
             log.error("Invoice link could not be found")
             return None
-        else:
-            return element.get_property("href")
+        return element.get_property("href")
 
 
 class PageIterator(Scraper):
@@ -297,6 +296,7 @@ class PageIterator(Scraper):
     def get_next_page_link(self):
         arefs = self.find_elements_by_xpath("//ul[@class='a-pagination']//a[starts-with(text(), 'Next')]")
         if len(arefs) == 0:
+            log.info("No more pages available")
             return None
         return arefs[0].get_attribute("href")
 
@@ -442,7 +442,7 @@ class OrderDetail(Scraper):
         if not date_match or not amount_match:
             log.error("Could not parse Refund for order %s: '%s'", self.order.number, line)
             return Transaction(None, 0, "Unparseable refund: " + line)
-        date_obj = datetime.strptime(date_match.group(1), '%B %d, %Y')
+        date_obj = self.to_date(date_match.group(1))
         amount_float = self.to_float(amount_match.group(1))
         return Transaction(date_obj, amount_float, None)
 
@@ -453,10 +453,14 @@ class OrderDetail(Scraper):
         if not date_match or not amount_match or not cc_last_4_match:
             log.error("Could not parse Payment for order %s: '%s'", self.order.number, line)
             return Transaction(None, 0, "Unparseable payment: " + line)
-        date_obj = datetime.strptime(date_match.group(1), '%B %d, %Y')
+        date_obj = self.to_date(date_match.group(1))
         amount_float = self.to_float(amount_match.group(1))
         cc_last_4 = cc_last_4_match.group(1)
         return Transaction(date_obj, -amount_float, cc_last_4)
+
+    @staticmethod
+    def to_date(date_string):
+        return datetime.strptime(date_string, '%B %d, %Y').date()
 
     @staticmethod
     def to_float(float_string):

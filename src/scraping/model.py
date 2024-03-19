@@ -15,7 +15,7 @@ class Transaction:
         self.cc_last_4 = cc_last_4
 
     def __repr__(self):
-        return f"Transaction(date={self.date!r}, amount={self.amount!r}, cc_last_4={self.cc_last_4!r})"
+        return f"Transaction(date={self.date}, amount={self.amount!r}, cc_last_4={self.cc_last_4!r})"
 
 
 class OrderStatus(Enum):
