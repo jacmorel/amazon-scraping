@@ -1,6 +1,7 @@
 import subprocess
 import json
 
+
 def get_item_fields(vault, item_name, fields):
     """
     Retrieve the fields of an item from a vault

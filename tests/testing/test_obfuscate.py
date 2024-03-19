@@ -8,12 +8,14 @@ import pytest
 
 from testing.obfuscate import Obfuscator, run
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+TEST_BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+ROOT_DIR = os.path.dirname(os.path.dirname(TEST_BASE_DIR))
+SRC_BASE_DIR = os.path.join(ROOT_DIR, "src", "testing")
 
 
 @pytest.fixture(scope="function")
 def obfuscator():
-    return Obfuscator(True, f"{BASE_DIR}/test_obfuscate.yaml")
+    return Obfuscator(True, f"{TEST_BASE_DIR}/test_obfuscate.yaml")
 
 
 @pytest.mark.parametrize("test_case, content, expected", [
@@ -151,8 +153,8 @@ def test_obfuscate_continues_incrementing_order_number_between_invocations():
 
 def test_obfuscate_end_2_end():
     with TestFiles() as (file1, file2, state_file):
-        subprocess.run(['python3', BASE_DIR + "/obfuscate.py", file1, "-r"])
-        subprocess.run(['python3', BASE_DIR + "/obfuscate.py", file2])
+        subprocess.run(['python3', SRC_BASE_DIR + "/obfuscate.py", file1, "-r"])
+        subprocess.run(['python3', SRC_BASE_DIR + "/obfuscate.py", file2])
 
 
 def remove_if_exists(file):
