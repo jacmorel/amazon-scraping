@@ -115,7 +115,7 @@ class Obfuscator:
         return backup_name
 
     def obfuscate(self, name):
-        files = glob.glob(name)
+        files = sorted(glob.glob(name))
         for file in files:
             self.obfuscate_file(file)
         self.save_state_file()
@@ -128,7 +128,7 @@ def run():
                         default=DEFAULT_INIT_FILE_NAME)
     parser.add_argument('-s', '--state_file', type=str, help='path to the yaml state file',
                         default=DEFAULT_STATE_FILE_NAME)
-    parser.add_argument('files', type=str, help='file pattern/file path to obfuscate')
+    parser.add_argument('files', type=str, help='file pattern/file path to obfuscate. Examples: "test_files*.html" (note the quotes are needed), test.html...')
     args = parser.parse_args()
     obfuscator = Obfuscator(args.reset_number, args.init_file, args.state_file)
     obfuscator.obfuscate(args.files)
