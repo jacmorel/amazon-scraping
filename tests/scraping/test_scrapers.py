@@ -75,12 +75,6 @@ ORDERS_2023 = list(itertools.chain(*[ORDERS_2023_PAGE_1, ORDERS_2023_PAGE_2, ORD
 ORDERS_2024 = list(itertools.chain(*[ORDERS_2024_PAGE_1, ORDERS_2024_PAGE_2, ORDERS_2024_PAGE_7]))
 ORDERS_2023_2024 = list(itertools.chain(*[ORDERS_2023, ORDERS_2024]))
 
-@pytest.fixture
-def driver():
-    driver = create_driver_with_default_options()
-    yield driver
-    driver.quit()
-
 
 @pytest.fixture
 def order(order_number="1", ordered_date=None):

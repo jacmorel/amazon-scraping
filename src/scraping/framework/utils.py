@@ -56,9 +56,10 @@ def get_output_file(base_name):
     return f"output/{base_name}__{datetime.now().strftime('%Y-%m-%d_%H-%M')}"
 
 
-def create_driver_with_default_options():
+def create_driver_with_default_options(headless=False):
     options = webdriver.ChromeOptions()
-    # options.add_argument('--headless')
+    if headless:
+        options.add_argument('--headless')
     chrome_prefs = {"profile.managed_default_content_settings.images": 2,
                     "profile.managed_default_content_settings.javascript": 2,
                     "permissions.default.stylesheet": 2}

@@ -1,11 +1,11 @@
 import os
 import subprocess
 import sys
-import tempfile
 from unittest.mock import patch, Mock
 
 import pytest
 
+from testing.files import write_temp_file, assert_file_content_equal, remove_if_exists
 from testing.obfuscate import Obfuscator, run
 
 TEST_BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -157,22 +157,3 @@ def test_obfuscate_end_2_end():
         subprocess.run(['python3', SRC_BASE_DIR + "/obfuscate.py", file2])
 
 
-def remove_if_exists(file):
-    if os.path.exists(file):
-        os.remove(file)
-
-
-def assert_file_content_equal(message, file_name, expected_content):
-    output = read_file(file_name)
-    assert output == expected_content, message + " {file_name}"
-
-
-def read_file(name):
-    with open(name) as output_file:
-        return output_file.read()
-
-
-def write_temp_file(content):
-    with tempfile.NamedTemporaryFile("w", delete=False) as input_file:
-        input_file.write(content)
-        return input_file.name
