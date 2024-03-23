@@ -10,7 +10,7 @@ from selenium.webdriver.remote.webelement import WebElement
 from selenium.webdriver.support.select import Select
 from selenium.webdriver.support.wait import WebDriverWait
 
-from scraping.model import Address, Transaction, Order
+from scraping.amazon.model import Address, Transaction, Order
 from utils.objects import recursive_vars
 from utils.perf import Timing
 
@@ -312,7 +312,11 @@ class OrderDetail(Scraper):
         self.go_to_order_details()
         with Timing():
             self.populate_summary()
+            self.populate_shipments()
         log.info("order = %s", recursive_vars(self.order))
+
+    def go_to_order_details(self):
+        self.get_page(self.order.details_link)
 
     def populate_summary(self):
         summary_div = self.find_element_by_css("[data-component='paymentDetails'")
@@ -320,9 +324,6 @@ class OrderDetail(Scraper):
         self.populate_payment_summary(summary_div)
         self.populate_transactions(summary_div)
         self.populate_address(summary_div)
-
-    def go_to_order_details(self):
-        self.get_page(self.order.details_link)
 
     def populate_payment_method(self, summary_div):
         payment_blocks = self.find_elements_by_xpath(".//*[contains(text(), 'Payment ')]", summary_div)
@@ -457,6 +458,9 @@ class OrderDetail(Scraper):
         amount_float = self.to_float(amount_match.group(1))
         cc_last_4 = cc_last_4_match.group(1)
         return Transaction(date_obj, -amount_float, cc_last_4)
+
+    def populate_shipments(self):
+        pass
 
     @staticmethod
     def to_date(date_string):

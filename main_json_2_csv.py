@@ -1,6 +1,6 @@
 import json
 
-from scraping.utils import write_csv_output_file
+from scraping.framework.utils import write_csv_output_file
 
 
 def run():

@@ -3,16 +3,16 @@ import logging as log
 import math
 import os
 from datetime import datetime
-from unittest.mock import patch, call
+from unittest.mock import patch
 
 import pytest
 from selenium.webdriver.common.by import By
 from selenium.webdriver.remote.webelement import WebElement
 from selenium.webdriver.support.select import Select
 
-from scraping.model import Transaction, Order, OrderStatus
-from scraping.scrapers import OrderHistory, OrderDetail, PageIterator, Login, CAPTCHA1, CAPTCHA2, Scraper
-from scraping.utils import create_driver_with_default_options
+from scraping.amazon.model import Transaction, Order, OrderStatus
+from scraping.amazon.scrapers import OrderHistory, OrderDetail, PageIterator, Login, CAPTCHA1, CAPTCHA2
+from scraping.framework.utils import create_driver_with_default_options
 from utils.objects import recursive_vars
 
 # log.basicConfig(level=log.DEBUG)
@@ -111,7 +111,7 @@ def test_login_captcha(driver, link, captcha, img):
             patch(target="builtins.input", return_value='John Doe') as mock_input, \
             patch(target="selenium.webdriver.remote.webelement.WebElement.send_keys") as mock_send_keys, \
             patch(target="selenium.webdriver.remote.webelement.WebElement.submit") as mock_submit, \
-            patch(target="scraping.scrapers.Login.wait_for_input"):
+            patch(target="scraping.amazon.scrapers.Login.wait_for_input"):
         login = Login(driver, "", "")
         login.handle_captcha(*captcha)
 
@@ -316,6 +316,12 @@ def test_extract_payment(driver, order, line, expected):
     tx = order_detail.extract_payment(line)
     assert expected == str(tx)
 
+
+def test_shipment(driver):
+    pass
+    # order_detail = get_order_detail(driver, order)
+    # tx = order_detail.extract_payment(line)
+    # assert expected == str(tx)
 
 @pytest.mark.parametrize("link, expected", [
     ['order_details_1_item_not_shipped.html', {

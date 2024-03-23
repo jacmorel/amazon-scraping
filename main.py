@@ -1,7 +1,7 @@
 import sys
 
-from scraping.scrapers import OrderHistory
-from scraping.utils import run_with_driver, get_output_file
+from scraping.amazon.scrapers import OrderHistory
+from scraping.framework.utils import run_with_driver
 
 from_year = 2023
 to_year = 2024

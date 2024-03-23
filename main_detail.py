@@ -2,9 +2,9 @@ import re
 import sys
 from datetime import datetime
 
-from scraping.model import Order
-from scraping.scrapers import OrderDetail
-from scraping.utils import run_with_driver
+from scraping.amazon.model import Order
+from scraping.amazon.scrapers import OrderDetail
+from scraping.framework.utils import run_with_driver
 
 page = ""
 

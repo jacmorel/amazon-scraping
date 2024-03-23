@@ -6,7 +6,7 @@ from datetime import datetime
 from selenium import webdriver
 
 from onepassword.client import get_item_fields
-from scraping.scrapers import Login
+from scraping.amazon.scrapers import Login
 from utils.objects import to_json
 
 
