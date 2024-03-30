@@ -11,7 +11,7 @@ log = get_logger()
 
 def log_return_decorator(func):
     def wrapper(*args, **kwargs):
-        log.info(f'{func.__name__}({args[0]})')
+        log.info(f'{func.__name__}({args})')
         result = func(*args, **kwargs)
         log.info(f'{func.__name__}({args[0]}) returned: {result}')
         return result
@@ -36,13 +36,20 @@ class By(Enum):
 
 
 class Node:
-    pass
+    def __init__(self, name=None):
+        self.name = name
+
+
+class CompositeNode(Node):
+    def __init__(self, name: str = None, children=None):
+        super().__init__(name)
+        self.children = children if isinstance(children, list) else [children] or []
 
 
 class Variable(Node):
     def __init__(self, name, attr):
+        super().__init__(name)
         self.attr = attr
-        self.name = name
 
     @log_return_decorator
     def scrape(self, element):
@@ -55,11 +62,24 @@ class Variable(Node):
         return f"Var({self.name}, {self.attr!s})"
 
 
-class Tag(Node):
-    def __init__(self, tag, by: By = By.TAG, value=None, contents=None):
-        self.tag = tag
-        (self.by, self.value) = by.get_by_value(tag, value)
-        self.children = contents if isinstance(contents, list) else [contents]
+class ManyOf(CompositeNode):
+    def __init__(self, name, children):
+        super().__init__(name, children)
+        assert len(self.children) == 1, "ManyOf can only have one child, got {}".format(len(children))
+
+    @log_return_decorator
+    def scrape(self, element):
+        return {self.name: self.children[0].scrape(element)}
+
+    def __str__(self):
+        return f"Var({self.name}, {self.children!s})"
+
+
+class Tag(CompositeNode):
+    def __init__(self, tag, by: By = By.TAG, value=None, children=None):
+        super().__init__(tag, children)
+        (self.by, self.value) = by.get_by_value(self.name, value)
+        self.children = children if isinstance(children, list) else [children]
 
     @log_return_decorator
     def scrape(self, parent):
@@ -67,7 +87,26 @@ class Tag(Node):
         if (elements is None) or (len(elements) == 0):
             log.error(f"No elements found for {self}")
             return None
-        return {k: v for e in elements for n in self.children for k, v in n.scrape(e).items()}
+        items = []
+        for element in elements:
+            attributes = self.process_element(element)
+            items.append(attributes)
+        return items[0] if len(items) == 1 else items
+        # return {k: v for n in self.children for e in elements for k, v in self.process_element(e, n)}
+
+    def process_element(self, element):
+        attributes = {}
+        for child in self.children:
+            child_value = self.scrape_element(element, child)
+            if isinstance(child_value, list):
+                attributes.update({k: v for item in child_value for k, v in item.items()})
+            else:
+                attributes.update(child_value)
+        return attributes
+
+    @log_return_decorator
+    def scrape_element(self, e, n):
+        return n.scrape(e)
 
     def find_elements(self, parent):
         try:
@@ -76,14 +115,17 @@ class Tag(Node):
             log.error(f"Unexpected error trying to find elements by {self.by}, {self.value}: " + str(e))
 
     def __str__(self):
-        return f"<{self.tag} {self.by!s}='{self.value}'>"
+        return f"<{self.name} {self.by!s}='{self.value}'>"
+
+    def __repr__(self):
+        return self.__str__()
 
 
 class Div(Tag):
-    def __init__(self, by: By = By.TAG, value=None, contents=None):
-        super().__init__('div', by, value, contents)
+    def __init__(self, by: By = By.TAG, value=None, children=None):
+        super().__init__('div', by, value, children)
 
 
 class A(Tag):
-    def __init__(self, by: By = By.TAG, value=None, contents=None):
-        super().__init__('a', by, value, contents)
+    def __init__(self, by: By = By.TAG, value=None, children=None):
+        super().__init__('a', by, value, children)
