@@ -19,9 +19,12 @@ class TestEnum(Enum):
 class TestClass:
     name = get_caller_class_name()
 
-    def __init__(self):
+    def __init__(self, child=None):
         self.time = TIME
         self.enum = TestEnum.A
+        self.list = [1, 2, 3]
+        self.dict = {"1": 1, "2": 2}
+        self.child = child
 
     def caller_of_get_caller(self):
         return get_caller()
@@ -30,12 +33,52 @@ class TestClass:
         return get_caller_class_name()
 
 
-def test_recursive_vars():
-    assert recursive_vars(TestClass()) == {'time': TIME, 'enum': TestEnum.A}
+def test_recursive_vars_with_nested_object():
+    assert recursive_vars(TestClass(TestClass())) == {
+        'time': TIME,
+        'enum': TestEnum.A,
+        'dict': {'1': 1, '2': 2},
+        'list': [1, 2, 3],
+        'child': {
+            'child': None,
+            'dict': {'1': 1, '2': 2},
+            'enum': TestEnum.A,
+            'list': [1, 2, 3],
+            'time': TIME
+        }
+    }
+
+
+def test_recursive_vars_with_dict_of_object():
+    assert recursive_vars({'1': TestClass(), '2': 2}) == {
+        '1': {
+            'child': None,
+            'dict': {'1': 1, '2': 2},
+            'enum': TestEnum.A,
+            'list': [1, 2, 3],
+            'time': TIME
+        },
+        '2': 2}
+
+
+def test_recursive_vars_with_list_of_object():
+    assert recursive_vars([TestClass()]) == [{
+        'child': None,
+        'dict': {'1': 1, '2': 2},
+        'enum': TestEnum.A,
+        'list': [1, 2, 3],
+        'time': TIME
+    }]
 
 
 def test_to_json():
-    assert to_json(TestClass()) == '{"time": "2024-05-04 03:02:01", "enum": "A"}'
+    assert to_json(TestClass()) == {
+        'child': None,
+        'dict': {'1': 1, '2': 2},
+        'enum': 'A',
+        'list': [1, 2, 3],
+        'time': '2024-05-04 03:02:01'
+    }
 
 
 def test_get_caller():

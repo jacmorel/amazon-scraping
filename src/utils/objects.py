@@ -9,7 +9,8 @@ def recursive_vars(obj, ignore_none=False):
     try:
         if isinstance(obj, list):
             return [recursive_vars(e, ignore_none) for e in obj]
-        # TODO does not handle dict yet
+        elif isinstance(obj, dict):
+            return {k: recursive_vars(v, ignore_none) for k, v in obj.items()}
         elif isinstance(obj, Enum):
             return obj
         else:
@@ -41,7 +42,8 @@ class EnumEncoder(JSONEncoder):
 
 
 def to_json(obj):
-    return json.dumps(obj, default=to_dict)
+    json_str = json.dumps(obj, default=to_dict)
+    return json.loads(json_str)
 
 
 def get_caller(depth=0):
